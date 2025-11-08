@@ -1,0 +1,14 @@
+{
+  "name": "band-monorepo",
+  "private": true,
+  "workspaces": ["client", "server"],
+  "scripts": {
+    "dev": "npm-run-all -p dev:server dev:client",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "install:all": "npm --prefix server i && npm --prefix client i"
+  },
+  "devDependencies": {
+    "npm-run-all": "^4.1.5"
+  }
+}
