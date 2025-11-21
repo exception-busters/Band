@@ -1,0 +1,18 @@
+• - WebRTC 연결 전 과정을 한 곳에 모았습니다. 로컬/원격 스트림 상태, 피어 커넥션 맵, offer/answer/ICE 처리 및 마이크 토글을 client/src/App.tsx:326-505에 추가해 브라우
+    저 간 오디오를 실제로 교환할 수 있습니다.                                                                                                                         
+  - 시그널링 서버에서 내려오는 peers, peer-joined/left, offer/answer/ice-candidate 이벤트를 모두 흡수하도록 WebSocket 처리기를 확장하여 입장 시 자동으로 offer를 생성 
+    하고, 이탈 시 커넥션을 정리합니다 (client/src/App.tsx:560-608).                                                                                                   
+  - 합주실 카드에 RTC 콘솔을 삽입해 마이크 공유 버튼·로컬 모니터·원격 피드 리스트를 시각화했고, 이에 맞춰 글래스모피즘 스타일을 확장해 감각적인 컨트롤 보드를 구현했습    니다 (client/src/App.tsx:924-993, client/src/App.css:430-489).                                                                                                    
+  - 녹음 테이크는 상수 MAX_TAKES로 제한하고 새로 만든 URL을 정리하도록 개선해, 브라우저 녹음 흐름이 WebRTC 오디오와 충돌하지 않도록 했습니다 (client/src/App.tsx:272, 
+    client/src/App.tsx:707-744).                                                                                                                                      
+  - 테스트: cd client && npm run build → WSL에서는 Windows에서 설치한 node_modules 때문에 @rollup/rollup-linux-x64-gnu 모듈을 찾지 못해 실패합니다. Windows 환경에서  
+    실행하거나 client/node_modules와 package-lock.json을 삭제한 뒤 WSL 안에서 npm install을 다시 수행하면 해결됩니다.
+                                                                                                                                                                      
+  다중 탭에서 테스트하려면 npm run dev로 서버/클라이언트를 띄운 뒤, 브라우저 두 개에서 동일 룸에 입장하고 마이크 권한을 허용하세요. 한쪽에서 “마이크 공유”를 누르면 상  대 탭의 원격 피드에 바로 등장합니다.                                                                                                                                
+                                                                                                                                                                      
+  다음 단계 제안                                                                                                                                                      
+                                                                                                                                                                      
+  1. TURN 서버나 추가 STUN 후보를 붙여 공용 네트워크/대칭 NAT에서도 안정적으로 세션이 붙도록 확장하세요.                                                              
+  2. 합주실 내부 전용 화면(캔버스/믹서/채팅)을 분리한 서브라우트를 도입해 WebRTC 연결 이후의 협업 UX를 심화시키면 좋습니다.
+
+  RTC 붙이는 시도 했었음
