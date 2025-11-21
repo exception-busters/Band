@@ -4,12 +4,22 @@ import { supabase } from '../lib/supabaseClient'
 
 type AuthAlert = { type: 'success' | 'error' | 'info'; message: string }
 
+interface SignUpData {
+  email: string
+  password: string
+  name: string
+  nickname: string
+  birthDate: string
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say'
+  phone?: string
+}
+
 type AuthContextType = {
   user: User | null
   loading: boolean
   alert: AuthAlert | null
   setAlert: (alert: AuthAlert | null) => void
-  signUp: (email: string, password: string) => Promise<void>
+  signUp: (data: SignUpData) => Promise<void>
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   isSupabaseReady: boolean
@@ -50,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (data: SignUpData) => {
     if (!supabase) {
       setAlert({ type: 'error', message: 'Supabase 환경변수를 설정한 뒤 다시 시도하세요.' })
       throw new Error('Supabase not configured')
@@ -60,13 +70,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAlert(null)
 
     try {
-      const { error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
+      // 1. 사용자 인증 생성 (metadata에 프로필 정보 포함)
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: data.email.trim(),
+        password: data.password,
+        options: {
+          data: {
+            name: data.name.trim(),
+            nickname: data.nickname.trim(),
+            birth_date: data.birthDate,
+            gender: data.gender,
+            phone: data.phone?.trim() || null,
+          },
+        },
       })
-      if (error) throw error
-      setAlert({ type: 'info', message: '확인 메일을 확인하면 가입이 완료됩니다.' })
+
+      if (authError) throw authError
+      if (!authData.user) throw new Error('회원가입에 실패했습니다.')
+
+      // 2. 인증 완료될 때까지 대기 (최대 2초)
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      // 3. 프로필 정보 저장
+      const { error: profileError } = await supabase.from('profiles').insert({
+        id: authData.user.id,
+        email: data.email.trim(),
+        name: data.name.trim(),
+        nickname: data.nickname.trim(),
+        birth_date: data.birthDate,
+        gender: data.gender,
+        phone: data.phone?.trim() || null,
+      })
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError)
+        console.error('Error details:', JSON.stringify(profileError, null, 2))
+        // 프로필 생성 실패 시에도 회원가입은 완료된 것으로 처리
+        setAlert({
+          type: 'info',
+          message: '회원가입은 완료되었습니다. 이메일 확인 후 로그인해주세요.',
+        })
+      } else {
+        setAlert({ type: 'success', message: '회원가입이 완료되었습니다! 로그인해주세요.' })
+      }
     } catch (error) {
+      console.error('SignUp error:', error)
       setAlert({
         type: 'error',
         message: error instanceof Error ? error.message : '회원가입 중 오류가 발생했습니다.',

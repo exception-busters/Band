@@ -2,11 +2,32 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
+interface SignUpData {
+  email: string
+  password: string
+  name: string
+  nickname: string
+  birthDate: string
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say'
+  phone?: string
+}
+
 export function Auth() {
   const { user, loading, alert, setAlert, signUp, signIn, isSupabaseReady } = useAuth()
   const [authMode, setAuthMode] = useState<'signup' | 'signin'>('signin')
+
+  // 로그인 필드
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+
+  // 회원가입 전용 필드
+  const [passwordConfirm, setPasswordConfirm] = useState('')
+  const [name, setName] = useState('')
+  const [nickname, setNickname] = useState('')
+  const [birthDate, setBirthDate] = useState('')
+  const [gender, setGender] = useState<'male' | 'female' | 'other' | 'prefer_not_to_say'>('prefer_not_to_say')
+  const [phone, setPhone] = useState('')
+
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -14,21 +35,59 @@ export function Auth() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+
     if (!email.trim() || !password.trim()) {
       setAlert({ type: 'error', message: '이메일과 비밀번호를 모두 입력하세요.' })
       return
     }
 
-    try {
-      if (authMode === 'signup') {
-        await signUp(email, password)
-      } else {
-        await signIn(email, password)
-        // 로그인 성공 시 이전 페이지 또는 rooms로 리다이렉트
-        navigate(from, { replace: true })
+    if (authMode === 'signup') {
+      // 회원가입 유효성 검사
+      if (!name.trim()) {
+        setAlert({ type: 'error', message: '이름을 입력하세요.' })
+        return
       }
-    } catch (error) {
-      // 에러는 AuthContext에서 처리됨
+      if (!nickname.trim()) {
+        setAlert({ type: 'error', message: '닉네임을 입력하세요.' })
+        return
+      }
+      if (!birthDate) {
+        setAlert({ type: 'error', message: '생년월일을 입력하세요.' })
+        return
+      }
+      if (password !== passwordConfirm) {
+        setAlert({ type: 'error', message: '비밀번호가 일치하지 않습니다.' })
+        return
+      }
+      if (password.length < 8) {
+        setAlert({ type: 'error', message: '비밀번호는 8자 이상이어야 합니다.' })
+        return
+      }
+
+      const signUpData: SignUpData = {
+        email,
+        password,
+        name,
+        nickname,
+        birthDate,
+        gender,
+        phone: phone.trim() || undefined
+      }
+
+      try {
+        await signUp(signUpData)
+        // 회원가입 성공 시 알림은 AuthContext에서 처리
+      } catch (error) {
+        // 에러는 AuthContext에서 처리됨
+      }
+    } else {
+      // 로그인
+      try {
+        await signIn(email, password)
+        navigate(from, { replace: true })
+      } catch (error) {
+        // 에러는 AuthContext에서 처리됨
+      }
     }
   }
 
@@ -71,8 +130,38 @@ export function Auth() {
           </div>
 
           <form onSubmit={handleSubmit} className="auth-form">
+            {authMode === 'signup' && (
+              <>
+                <div className="form-group">
+                  <label htmlFor="name">이름 *</label>
+                  <input
+                    id="name"
+                    type="text"
+                    placeholder="홍길동"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    disabled={!isSupabaseReady}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="nickname">닉네임 *</label>
+                  <input
+                    id="nickname"
+                    type="text"
+                    placeholder="멋진기타리스트"
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value)}
+                    required
+                    disabled={!isSupabaseReady}
+                  />
+                </div>
+              </>
+            )}
+
             <div className="form-group">
-              <label htmlFor="email">이메일</label>
+              <label htmlFor="email">이메일 *</label>
               <input
                 id="email"
                 type="email"
@@ -84,8 +173,52 @@ export function Auth() {
               />
             </div>
 
+            {authMode === 'signup' && (
+              <>
+                <div className="form-group">
+                  <label htmlFor="birthDate">생년월일 *</label>
+                  <input
+                    id="birthDate"
+                    type="date"
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(e.target.value)}
+                    required
+                    disabled={!isSupabaseReady}
+                    max={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="gender">성별</label>
+                  <select
+                    id="gender"
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value as any)}
+                    disabled={!isSupabaseReady}
+                  >
+                    <option value="prefer_not_to_say">선택 안 함</option>
+                    <option value="male">남성</option>
+                    <option value="female">여성</option>
+                    <option value="other">기타</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="phone">전화번호</label>
+                  <input
+                    id="phone"
+                    type="tel"
+                    placeholder="010-1234-5678"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    disabled={!isSupabaseReady}
+                  />
+                </div>
+              </>
+            )}
+
             <div className="form-group">
-              <label htmlFor="password">비밀번호</label>
+              <label htmlFor="password">비밀번호 *</label>
               <input
                 id="password"
                 type="password"
@@ -97,6 +230,22 @@ export function Auth() {
                 disabled={!isSupabaseReady}
               />
             </div>
+
+            {authMode === 'signup' && (
+              <div className="form-group">
+                <label htmlFor="passwordConfirm">비밀번호 확인 *</label>
+                <input
+                  id="passwordConfirm"
+                  type="password"
+                  placeholder="비밀번호 재입력"
+                  value={passwordConfirm}
+                  onChange={(e) => setPasswordConfirm(e.target.value)}
+                  minLength={8}
+                  required
+                  disabled={!isSupabaseReady}
+                />
+              </div>
+            )}
 
             {alert && <div className={`auth-alert ${alert.type}`}>{alert.message}</div>}
 

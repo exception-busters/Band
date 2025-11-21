@@ -224,7 +224,13 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       wsRef.current = ws
 
       ws.onopen = () => setSignalStatus('connected')
-      ws.onerror = () => setSignalStatus('error')
+      ws.onerror = (event) => {
+        // Suppress connection errors in development mode (React Strict Mode double mount)
+        if (import.meta.env.DEV && ws.readyState === WebSocket.CONNECTING) {
+          return
+        }
+        setSignalStatus('error')
+      }
       ws.onclose = () => {
         setSignalStatus('idle')
         setClientId(null)
