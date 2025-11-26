@@ -5,6 +5,7 @@ import { Navigation } from './components/Navigation'
 import { Home } from './pages/Home'
 import { Auth } from './pages/Auth'
 import { Rooms } from './pages/Rooms'
+import { CreateRoom } from './pages/CreateRoom'
 import { RoomDetail } from './pages/RoomDetail'
 import { Recording } from './pages/Recording'
 import { MixLab } from './pages/MixLab'
@@ -23,6 +24,7 @@ function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/rooms" element={<Rooms />} />
+                <Route path="/rooms/create" element={<CreateRoom />} />
                 <Route path="/rooms/:roomId" element={<RoomDetail />} />
                 <Route path="/recording" element={<Recording />} />
                 <Route path="/mix" element={<MixLab />} />

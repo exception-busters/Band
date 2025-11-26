@@ -6,9 +6,18 @@
       "Bash(tasklist:*)",
       "Bash(findstr:*)",
       "Bash(taskkill //F //PID 31540)",
-      "Bash(taskkill //F //PID 29388)"
+      "Bash(taskkill //F //PID 29388)",
+      "WebSearch",
+      "WebFetch(domain:supabase.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(claude mcp list:*)",
+      "Bash(claude mcp add:*)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enabledMcpjsonServers": [
+    "supabase"
+  ],
+  "enableAllProjectMcpServers": true
 }

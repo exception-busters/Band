@@ -22,11 +22,8 @@ interface Room {
   title: string
   vibe: string
   genre: string
-  bpm: number
   musicians: number
   capacity: number
-  latencyMs: number
-  region: string
   status: RoomStatus
 }
 
@@ -59,11 +56,8 @@ export function Rooms() {
           title: room.title,
           vibe: room.description || '함께 음악을 만들어요',
           genre: room.genre || '기타',
-          bpm: 120, // TODO: 실제 BPM 추가
           musicians: room.current_participants,
           capacity: room.max_participants,
-          latencyMs: 25, // TODO: 실제 레이턴시 측정
-          region: 'KR', // TODO: 실제 지역 추가
           status: room.status as RoomStatus,
         }))
 
@@ -170,22 +164,10 @@ export function Rooms() {
 
               <div className="room-stats">
                 <div className="stat">
-                  <span className="stat-label">BPM</span>
-                  <span className="stat-value">{room.bpm}</span>
-                </div>
-                <div className="stat">
                   <span className="stat-label">인원</span>
                   <span className="stat-value">
                     {room.musicians}/{room.capacity}
                   </span>
-                </div>
-                <div className="stat">
-                  <span className="stat-label">지연</span>
-                  <span className="stat-value">{room.latencyMs}ms</span>
-                </div>
-                <div className="stat">
-                  <span className="stat-label">지역</span>
-                  <span className="stat-value">{room.region}</span>
                 </div>
               </div>
 

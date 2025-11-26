@@ -2,7 +2,19 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useRoom } from '../contexts/RoomContext'
-import { INITIAL_ROOMS, ROOM_PROFILES } from '../data/rooms'
+import { supabase } from '../lib/supabaseClient'
+
+interface Room {
+  id: string
+  title: string
+  description: string | null
+  host_id: string
+  max_participants: number
+  current_participants: number
+  status: string
+  genre: string | null
+  tags: string[]
+}
 
 const RTC_STATUS_TEXT = {
   idle: '대기',
@@ -31,18 +43,40 @@ export function RoomDetail() {
     leaveRoom,
   } = useRoom()
 
+  const [room, setRoom] = useState<Room | null>(null)
+  const [loading, setLoading] = useState(true)
   const [hasJoined, setHasJoined] = useState(false)
   const [viewerMode, setViewerMode] = useState(false)
   const localPreviewRef = useRef<HTMLAudioElement | null>(null)
 
-  const room = INITIAL_ROOMS.find((r) => r.id === roomId)
-  const roomProfile = roomId ? ROOM_PROFILES[roomId] : undefined
-
+  // DB에서 방 정보 가져오기
   useEffect(() => {
-    if (!room) {
-      navigate('/rooms')
+    const fetchRoom = async () => {
+      if (!roomId || !supabase) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('rooms')
+          .select('*')
+          .eq('id', roomId)
+          .single()
+
+        if (error) throw error
+        setRoom(data)
+      } catch (err) {
+        console.error('Failed to fetch room:', err)
+        navigate('/rooms')
+      } finally {
+        setLoading(false)
+      }
     }
-  }, [room, navigate])
+
+    fetchRoom()
+  }, [roomId, navigate])
+
 
   useEffect(() => {
     if (localPreviewRef.current) {
@@ -91,11 +125,15 @@ export function RoomDetail() {
 
   const remoteAudioEntries = Object.entries(remoteAudioMap)
 
+  if (loading) {
+    return <div className="loading-state">합주실 정보를 불러오는 중...</div>
+  }
+
   if (!room) {
     return null
   }
 
-  // 입장 전 화면 - 매우 임팩트 있게!
+  // 입장 전 화면
   if (!hasJoined) {
     return (
       <div className="room-entrance">
@@ -106,49 +144,37 @@ export function RoomDetail() {
               <Link to="/rooms">← 합주실 목록</Link>
             </div>
             <h1 className="entrance-title">{room.title}</h1>
-            <p className="entrance-genre">{room.genre}</p>
-            <p className="entrance-vibe">{room.vibe}</p>
+            <p className="entrance-genre">{room.genre || '기타'}</p>
+            <p className="entrance-vibe">{room.description || '함께 음악을 만들어요'}</p>
 
             <div className="entrance-stats">
-              <div className="entrance-stat">
-                <span className="stat-icon">🎵</span>
-                <div>
-                  <div className="stat-value">{room.bpm} BPM</div>
-                  <div className="stat-label">템포</div>
-                </div>
-              </div>
               <div className="entrance-stat">
                 <span className="stat-icon">👥</span>
                 <div>
                   <div className="stat-value">
-                    {room.musicians}/{room.capacity}
+                    {room.current_participants}/{room.max_participants}
                   </div>
                   <div className="stat-label">참여 중</div>
                 </div>
               </div>
               <div className="entrance-stat">
-                <span className="stat-icon">⚡</span>
+                <span className="stat-icon">📌</span>
                 <div>
-                  <div className="stat-value">{room.latencyMs}ms</div>
-                  <div className="stat-label">지연시간</div>
-                </div>
-              </div>
-              <div className="entrance-stat">
-                <span className="stat-icon">🌏</span>
-                <div>
-                  <div className="stat-value">{room.region}</div>
-                  <div className="stat-label">서버 위치</div>
+                  <div className="stat-value">
+                    {room.status === 'open' ? '입장 가능' : room.status === 'recording' ? '녹음 중' : '잠김'}
+                  </div>
+                  <div className="stat-label">상태</div>
                 </div>
               </div>
             </div>
 
-            {roomProfile && (
-              <div className="entrance-instruments">
-                <h3>사용 중인 악기</h3>
-                <div className="instrument-list">
-                  {roomProfile.instruments.map((instrument) => (
-                    <span key={instrument} className="instrument-tag">
-                      {instrument}
+            {room.tags && room.tags.length > 0 && (
+              <div className="entrance-tags">
+                <h3>태그</h3>
+                <div className="tag-list">
+                  {room.tags.map((tag) => (
+                    <span key={tag} className="tag-item">
+                      #{tag}
                     </span>
                   ))}
                 </div>
@@ -189,21 +215,6 @@ export function RoomDetail() {
                 <div className="entrance-loading">서버에 연결 중...</div>
               )}
             </div>
-
-            {roomProfile && (
-              <div className="entrance-schedule">
-                <h3>세션 일정</h3>
-                {roomProfile.schedule.map((event, idx) => (
-                  <div key={idx} className="schedule-item">
-                    <span className="schedule-time">{event.time}</span>
-                    <div className="schedule-content">
-                      <strong>{event.title}</strong>
-                      <small>{event.description}</small>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -301,21 +312,17 @@ export function RoomDetail() {
           <div className="room-details-card">
             <h3>룸 정보</h3>
             <div className="detail-item">
-              <span>BPM</span>
-              <strong>{room.bpm}</strong>
+              <span>장르</span>
+              <strong>{room.genre || '기타'}</strong>
             </div>
             <div className="detail-item">
-              <span>지연시간</span>
-              <strong>{room.latencyMs}ms</strong>
-            </div>
-            <div className="detail-item">
-              <span>지역</span>
-              <strong>{room.region}</strong>
+              <span>상태</span>
+              <strong>{room.status === 'open' ? '입장 가능' : room.status === 'recording' ? '녹음 중' : '잠김'}</strong>
             </div>
             <div className="detail-item">
               <span>수용 인원</span>
               <strong>
-                {room.musicians}/{room.capacity}
+                {room.current_participants}/{room.max_participants}
               </strong>
             </div>
           </div>
