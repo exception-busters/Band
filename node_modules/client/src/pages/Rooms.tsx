@@ -72,17 +72,18 @@ export function Rooms() {
     fetchRooms()
 
     // 실시간 업데이트 구독
-    if (supabase) {
-      const channel = supabase
-        .channel('rooms-changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => {
-          fetchRooms()
-        })
-        .subscribe()
+    if (!supabase) return
 
-      return () => {
-        supabase.removeChannel(channel)
-      }
+    const sb = supabase // 타입 narrowing을 위한 로컬 참조
+    const channel = sb
+      .channel('rooms-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => {
+        fetchRooms()
+      })
+      .subscribe()
+
+    return () => {
+      sb.removeChannel(channel)
     }
   }, [])
 

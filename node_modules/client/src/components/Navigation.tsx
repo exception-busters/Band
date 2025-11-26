@@ -30,6 +30,9 @@ export function Navigation() {
         <Link to="/community">커뮤니티</Link>
       </div>
       <div className="nav-actions">
+        <Link to="/settings/audio" className="nav-settings" title="오디오 설정">
+          🎛️
+        </Link>
         {user ? (
           <div className="user-menu">
             <span className="user-email">{user.email}</span>

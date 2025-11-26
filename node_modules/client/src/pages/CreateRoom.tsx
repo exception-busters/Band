@@ -13,6 +13,22 @@ const COMMON_TAGS = [
   '즉흥연주', '커버곡', '자작곡', '녹음가능'
 ]
 
+// 사용 가능한 악기 목록
+const AVAILABLE_INSTRUMENTS = [
+  { id: 'vocal', name: '보컬', icon: '🎤' },
+  { id: 'guitar', name: '기타', icon: '🎸' },
+  { id: 'bass', name: '베이스', icon: '🎸' },
+  { id: 'keyboard', name: '건반', icon: '🎹' },
+  { id: 'drums', name: '드럼', icon: '🥁' },
+  { id: 'other', name: '기타 악기', icon: '🎵' },
+]
+
+// 악기 슬롯 타입
+interface InstrumentSlot {
+  instrument: string
+  count: number
+}
+
 export function CreateRoom() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -23,6 +39,14 @@ export function CreateRoom() {
   const [maxParticipants, setMaxParticipants] = useState(8)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [customTag, setCustomTag] = useState('')
+  const [freeJoin, setFreeJoin] = useState(true)
+  const [instrumentSlots, setInstrumentSlots] = useState<InstrumentSlot[]>([
+    { instrument: 'vocal', count: 1 },
+    { instrument: 'guitar', count: 1 },
+    { instrument: 'bass', count: 1 },
+    { instrument: 'keyboard', count: 1 },
+    { instrument: 'drums', count: 1 },
+  ])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -46,6 +70,33 @@ export function CreateRoom() {
     }
   }
 
+  // 악기 슬롯 관리 함수들
+  const handleSlotCountChange = (instrument: string, count: number) => {
+    setInstrumentSlots(prev =>
+      prev.map(slot =>
+        slot.instrument === instrument ? { ...slot, count: Math.max(0, Math.min(10, count)) } : slot
+      )
+    )
+  }
+
+  const handleAddInstrument = (instrumentId: string) => {
+    if (!instrumentSlots.find(s => s.instrument === instrumentId)) {
+      setInstrumentSlots(prev => [...prev, { instrument: instrumentId, count: 1 }])
+    }
+  }
+
+  const handleRemoveInstrument = (instrument: string) => {
+    setInstrumentSlots(prev => prev.filter(s => s.instrument !== instrument))
+  }
+
+  // 아직 추가되지 않은 악기 목록
+  const availableToAdd = AVAILABLE_INSTRUMENTS.filter(
+    inst => !instrumentSlots.find(s => s.instrument === inst.id)
+  )
+
+  // 총 악기 슬롯 수 계산
+  const totalSlots = instrumentSlots.reduce((sum, s) => sum + s.count, 0)
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
@@ -63,6 +114,9 @@ export function CreateRoom() {
     setError(null)
 
     try {
+      // 0개인 악기 슬롯은 제외
+      const validSlots = instrumentSlots.filter(s => s.count > 0)
+
       const { data, error: insertError } = await supabase
         .from('rooms')
         .insert({
@@ -72,7 +126,9 @@ export function CreateRoom() {
           max_participants: maxParticipants,
           genre: genre,
           tags: selectedTags,
-          status: 'open'
+          status: 'open',
+          free_join: freeJoin,
+          instrument_slots: validSlots
         })
         .select()
         .single()
@@ -186,6 +242,89 @@ export function CreateRoom() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* 악기 구성 설정 */}
+          <div className="form-group">
+            <label>악기 구성</label>
+            <p className="form-hint">각 악기별 참여 가능 인원을 설정하세요 (총 {totalSlots}자리)</p>
+
+            <div className="instrument-slots">
+              {instrumentSlots.map(slot => {
+                const instInfo = AVAILABLE_INSTRUMENTS.find(i => i.id === slot.instrument)
+                return (
+                  <div key={slot.instrument} className="instrument-slot">
+                    <span className="slot-icon">{instInfo?.icon}</span>
+                    <span className="slot-name">{instInfo?.name || slot.instrument}</span>
+                    <div className="slot-count-control">
+                      <button
+                        type="button"
+                        onClick={() => handleSlotCountChange(slot.instrument, slot.count - 1)}
+                        disabled={slot.count <= 0}
+                      >
+                        -
+                      </button>
+                      <span className="slot-count">{slot.count}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleSlotCountChange(slot.instrument, slot.count + 1)}
+                        disabled={slot.count >= 10}
+                      >
+                        +
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      className="slot-remove"
+                      onClick={() => handleRemoveInstrument(slot.instrument)}
+                      title="악기 제거"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+
+            {availableToAdd.length > 0 && (
+              <div className="add-instrument">
+                <select
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      handleAddInstrument(e.target.value)
+                      e.target.value = ''
+                    }
+                  }}
+                  defaultValue=""
+                >
+                  <option value="" disabled>+ 악기 추가</option>
+                  {availableToAdd.map(inst => (
+                    <option key={inst.id} value={inst.id}>
+                      {inst.icon} {inst.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* 참여 방식 설정 */}
+          <div className="form-group">
+            <label>참여 방식</label>
+            <div className="toggle-option">
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={freeJoin}
+                  onChange={(e) => setFreeJoin(e.target.checked)}
+                />
+                <span className="toggle-slider"></span>
+              </label>
+              <div className="toggle-label">
+                <strong>{freeJoin ? '자유 참여' : '승인 필요'}</strong>
+                <span>{freeJoin ? '누구나 바로 연주자로 참여할 수 있습니다' : '방장이 승인해야 연주자로 참여할 수 있습니다'}</span>
+              </div>
+            </div>
           </div>
 
           {error && <div className="form-error">{error}</div>}
