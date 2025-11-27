@@ -76,9 +76,20 @@ export function RoomDetail() {
     peerInstruments,
     myInstrument,
     setMyInstrument,
+    // 네트워크 상태
+    peerNetworkStats,
   } = useRoom()
 
   const { settings: audioSettings, inputDevices } = useAudioSettings()
+
+  // 네트워크 품질 아이콘
+  const QUALITY_ICONS: Record<string, { icon: string; color: string; label: string }> = {
+    excellent: { icon: '🟢', color: '#4ade80', label: '최상' },
+    good: { icon: '🟢', color: '#4ade80', label: '양호' },
+    fair: { icon: '🟡', color: '#facc15', label: '보통' },
+    poor: { icon: '🔴', color: '#f87171', label: '불량' },
+    unknown: { icon: '⚪', color: '#9ca3af', label: '측정 중' },
+  }
 
   const [room, setRoom] = useState<Room | null>(null)
   const [loading, setLoading] = useState(true)
@@ -380,6 +391,8 @@ export function RoomDetail() {
             {remoteAudioEntries.map(([oderId, stream]) => {
               const peerInfo = peerInstruments[oderId]
               const instInfo = peerInfo ? INSTRUMENT_INFO[peerInfo.instrument] : null
+              const netStats = peerNetworkStats[oderId]
+              const qualityInfo = QUALITY_ICONS[netStats?.quality || 'unknown']
 
               return (
                 <div key={oderId} className="performer-item active">
@@ -393,12 +406,23 @@ export function RoomDetail() {
                     <span className="performer-name">{peerInfo?.nickname || `연주자 ${oderId.slice(0, 4)}`}</span>
                     <span className="performer-instrument">{instInfo?.name || '연주 중'}</span>
                   </div>
+                  {/* 네트워크 상태 표시 */}
+                  <div className="performer-latency" title={`레이턴시: ${netStats?.latency ?? '?'}ms | 지터: ${netStats?.jitter ?? '?'}ms | 품질: ${qualityInfo.label}`}>
+                    <span className="latency-value" style={{ color: qualityInfo.color }}>
+                      {netStats?.latency != null ? `${netStats.latency}ms` : '--'}
+                    </span>
+                    <span className="quality-indicator">{qualityInfo.icon}</span>
+                  </div>
                   <audio
                     autoPlay
                     playsInline
                     ref={(node) => {
                       if (node && stream) {
                         node.srcObject = stream
+                        // 브라우저 자동 재생 정책 우회
+                        node.play().catch(err => {
+                          console.log('Audio play failed:', err)
+                        })
                       }
                     }}
                   />
@@ -484,6 +508,8 @@ export function RoomDetail() {
                 const mix = mixSettingsMap[oderId] || { volume: 1, pan: 0, muted: false }
                 const peerInfo = peerInstruments[oderId]
                 const instInfo = peerInfo ? INSTRUMENT_INFO[peerInfo.instrument] : null
+                const netStats = peerNetworkStats[oderId]
+                const qualityInfo = QUALITY_ICONS[netStats?.quality || 'unknown']
 
                 return (
                   <div key={oderId} className={`mixer-channel ${mix.muted ? 'muted' : ''}`}>
@@ -496,6 +522,14 @@ export function RoomDetail() {
                       >
                         {mix.muted ? '🔇' : '🔊'}
                       </button>
+                    </div>
+                    {/* 네트워크 상태 표시 */}
+                    <div className="channel-latency">
+                      <span className="quality-dot" style={{ background: qualityInfo.color }}></span>
+                      <span className="latency-text">
+                        {netStats?.latency != null ? `${netStats.latency}ms` : '측정 중'}
+                        {netStats?.jitter != null && <small> (지터: {netStats.jitter}ms)</small>}
+                      </span>
                     </div>
                     <div className="channel-controls">
                       <div className="control-row">

@@ -3588,6 +3588,27 @@ body {
   color: var(--success);
 }
 
+/* 레이턴시 표시 */
+.performer-latency {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  margin-left: auto;
+}
+
+.performer-latency .latency-value {
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-weight: 500;
+}
+
+.performer-latency .quality-indicator {
+  font-size: 0.8rem;
+}
+
 .mic-toggle {
   width: 36px;
   height: 36px;
@@ -4100,6 +4121,35 @@ body {
   margin-bottom: 12px;
   font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+/* 믹서 채널 레이턴시 표시 */
+.channel-latency {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  margin-bottom: 8px;
+}
+
+.channel-latency .quality-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.channel-latency .latency-text {
+  font-family: 'Monaco', 'Consolas', monospace;
+  color: var(--text-secondary);
+}
+
+.channel-latency .latency-text small {
+  color: var(--text-muted);
+  font-size: 0.65rem;
 }
 
 .channel-error {

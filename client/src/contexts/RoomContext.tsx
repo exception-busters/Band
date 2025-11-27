@@ -30,6 +30,24 @@ export interface PeerInstrument {
   nickname: string
 }
 
+// 피어 네트워크 상태
+export interface PeerNetworkStats {
+  latency: number | null      // RTT in ms
+  jitter: number | null       // 지터 in ms
+  packetsLost: number         // 패킷 손실 수
+  packetLossRate: number      // 패킷 손실률 (%)
+  quality: 'excellent' | 'good' | 'fair' | 'poor' | 'unknown'
+}
+
+// 네트워크 품질 판정 함수
+function getNetworkQuality(latency: number | null, packetLossRate: number): PeerNetworkStats['quality'] {
+  if (latency === null) return 'unknown'
+  if (latency < 30 && packetLossRate < 1) return 'excellent'
+  if (latency < 60 && packetLossRate < 3) return 'good'
+  if (latency < 100 && packetLossRate < 5) return 'fair'
+  return 'poor'
+}
+
 type RoomContextType = {
   // WebSocket
   signalStatus: SignalStatus
@@ -69,6 +87,9 @@ type RoomContextType = {
   peerInstruments: Record<string, PeerInstrument>
   myInstrument: string | null
   setMyInstrument: (instrument: string) => void
+
+  // 네트워크 상태
+  peerNetworkStats: Record<string, PeerNetworkStats>
 }
 
 const RoomContext = createContext<RoomContextType | null>(null)
@@ -104,6 +125,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const [peerInstruments, setPeerInstruments] = useState<Record<string, PeerInstrument>>({})
   const [myInstrument, setMyInstrumentState] = useState<string | null>(null)
 
+  // 네트워크 상태
+  const [peerNetworkStats, setPeerNetworkStats] = useState<Record<string, PeerNetworkStats>>({})
+
   const wsRef = useRef<WebSocket | null>(null)
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map())
 
@@ -114,11 +138,16 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   }
 
   const attachLocalTracks = (pc: RTCPeerConnection, stream: MediaStream | null = localStream) => {
-    if (!stream) return
+    if (!stream) {
+      console.log('[RTC] attachLocalTracks: No stream available!')
+      return
+    }
+    console.log('[RTC] attachLocalTracks: Adding', stream.getTracks().length, 'tracks')
     stream.getTracks().forEach((track) => {
       const already = pc.getSenders().some((sender) => sender.track === track)
       if (!already) {
         pc.addTrack(track, stream)
+        console.log('[RTC] Track added:', track.kind)
       }
     })
   }
@@ -144,15 +173,21 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
     pc.onicecandidate = (event) => {
       if (event.candidate) {
+        console.log('[RTC] ICE candidate generated for:', peerId.slice(0, 8))
         sendSignalMessage({ type: 'ice-candidate', to: peerId, candidate: event.candidate })
+      } else {
+        console.log('[RTC] ICE gathering complete for:', peerId.slice(0, 8))
       }
     }
     pc.ontrack = (event) => {
+      console.log('[RTC] ontrack received from:', peerId.slice(0, 8), 'track:', event.track.kind)
       const stream = event.streams[0] ?? new MediaStream([event.track])
       setRemoteAudioMap((prev) => ({ ...prev, [peerId]: stream }))
     }
     pc.onconnectionstatechange = () => {
+      console.log(`[RTC] Connection state changed: ${pc.connectionState} (peer: ${peerId.slice(0, 8)})`)
       if (pc.connectionState === 'connected') {
+        console.log('[RTC] Setting rtcStatus to LIVE!')
         setRtcStatus('live')
       } else if (pc.connectionState === 'failed') {
         setRtcStatus('error')
@@ -160,6 +195,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
         closePeerConnection(peerId)
       }
+    }
+    pc.oniceconnectionstatechange = () => {
+      console.log(`[RTC] ICE state changed: ${pc.iceConnectionState} (peer: ${peerId.slice(0, 8)})`)
     }
     attachLocalTracks(pc)
     peerConnections.current.set(peerId, pc)
@@ -178,49 +216,70 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   }
 
   const createOfferForPeer = async (peerId: string) => {
+    console.log('[RTC] createOfferForPeer called for:', peerId.slice(0, 8))
     try {
       const pc = ensurePeerConnection(peerId)
-      setRtcStatus('connecting')
+      // 이미 connected 상태면 connecting으로 바꾸지 않음
+      if (pc.connectionState !== 'connected') {
+        setRtcStatus('connecting')
+      }
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
+      console.log('[RTC] Offer created and sent to:', peerId.slice(0, 8))
       sendSignalMessage({ type: 'offer', to: peerId, offer })
     } catch (error) {
+      console.error('[RTC] createOfferForPeer error:', error)
       setRtcStatus('error')
       setRtcError('WebRTC offer 생성에 실패했습니다.')
     }
   }
 
   const handleRemoteOffer = async (peerId: string, offer: RTCSessionDescriptionInit) => {
+    console.log('[RTC] handleRemoteOffer from:', peerId.slice(0, 8))
     try {
       const pc = ensurePeerConnection(peerId)
       await pc.setRemoteDescription(offer)
       attachLocalTracks(pc)
       const answer = await pc.createAnswer()
       await pc.setLocalDescription(answer)
+      console.log('[RTC] Answer created and sent to:', peerId.slice(0, 8))
       sendSignalMessage({ type: 'answer', to: peerId, answer })
-      setRtcStatus('connecting')
+      // 이미 connected 상태면 connecting으로 바꾸지 않음
+      if (pc.connectionState !== 'connected') {
+        setRtcStatus('connecting')
+      }
     } catch (error) {
+      console.error('[RTC] handleRemoteOffer error:', error)
       setRtcStatus('error')
       setRtcError('원격 offer 처리 중 오류가 발생했습니다.')
     }
   }
 
   const handleRemoteAnswer = async (peerId: string, answer: RTCSessionDescriptionInit) => {
+    console.log('[RTC] handleRemoteAnswer from:', peerId.slice(0, 8))
     const pc = peerConnections.current.get(peerId)
     if (!pc) return
     try {
       await pc.setRemoteDescription(answer)
-    } catch {
+      console.log('[RTC] Remote answer set, connectionState:', pc.connectionState)
+    } catch (error) {
+      console.error('[RTC] handleRemoteAnswer error:', error)
       setRtcStatus('error')
     }
   }
 
   const handleRemoteCandidate = async (peerId: string, candidate: RTCIceCandidateInit) => {
+    console.log('[RTC] Received ICE candidate from:', peerId.slice(0, 8))
     const pc = peerConnections.current.get(peerId)
-    if (!pc) return
+    if (!pc) {
+      console.log('[RTC] No peer connection for:', peerId.slice(0, 8))
+      return
+    }
     try {
       await pc.addIceCandidate(candidate)
-    } catch {
+      console.log('[RTC] ICE candidate added, iceConnectionState:', pc.iceConnectionState)
+    } catch (error) {
+      console.error('[RTC] Failed to add ICE candidate:', error)
       setRtcStatus('error')
     }
   }
@@ -264,7 +323,26 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       }
 
       setRtcError(null)
-      setRtcStatus(peerConnections.current.size > 0 ? 'connecting' : 'live')
+
+      // 기존 peer connection에 트랙 추가하고 renegotiation
+      if (peerConnections.current.size > 0) {
+        console.log('[RTC] Adding tracks to existing peer connections')
+        for (const [peerId, pc] of peerConnections.current.entries()) {
+          attachLocalTracks(pc, stream)
+          // offer 다시 생성해서 보내기
+          try {
+            const offer = await pc.createOffer()
+            await pc.setLocalDescription(offer)
+            sendSignalMessage({ type: 'offer', to: peerId, offer })
+            console.log('[RTC] Renegotiation offer sent to:', peerId.slice(0, 8))
+          } catch (err) {
+            console.error('[RTC] Renegotiation failed:', err)
+          }
+        }
+        setRtcStatus('connecting')
+      } else {
+        setRtcStatus('live')
+      }
     } catch (err) {
       console.error('마이크 접근 실패:', err)
       setRtcError('마이크 권한이 필요합니다. 오디오 설정에서 장치를 확인해주세요.')
@@ -313,6 +391,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     // 악기 정보 초기화
     setPeerInstruments({})
     setMyInstrumentState(null)
+    // 네트워크 상태 초기화
+    setPeerNetworkStats({})
   }
 
   // 닉네임 저장
@@ -413,101 +493,122 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    try {
-      setSignalStatus('connecting')
-      const ws = new WebSocket(SIGNALING_URL)
-      wsRef.current = ws
+    // StrictMode double-mount 방지용 플래그
+    let isMounted = true
 
-      ws.onopen = () => setSignalStatus('connected')
-      ws.onerror = (_event) => {
-        // Suppress connection errors in development mode (React Strict Mode double mount)
-        if (import.meta.env.DEV && ws.readyState === WebSocket.CONNECTING) {
+    console.log('[WS] Connecting to', SIGNALING_URL)
+    setSignalStatus('connecting')
+    const ws = new WebSocket(SIGNALING_URL)
+    wsRef.current = ws
+
+    ws.onopen = () => {
+      console.log('[WS] Connected!')
+      if (isMounted) setSignalStatus('connected')
+    }
+    ws.onerror = (event) => {
+      console.error('[WS] Error:', event)
+      if (!isMounted) return
+      setSignalStatus('error')
+    }
+    ws.onclose = (event) => {
+      console.log('[WS] Closed:', event.code, event.reason)
+      if (!isMounted) return
+      setSignalStatus('idle')
+      setClientId(null)
+      setPeers([])
+      teardownPeerConnections()
+    }
+    ws.onmessage = (event) => {
+      if (!isMounted) return
+      try {
+        const payload = JSON.parse(event.data)
+        if (payload.type === 'welcome') {
+          setClientId(payload.clientId)
           return
         }
-        setSignalStatus('error')
-      }
-      ws.onclose = () => {
-        setSignalStatus('idle')
-        setClientId(null)
-        setPeers([])
-        teardownPeerConnections()
-      }
-      ws.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data)
-          if (payload.type === 'welcome') {
-            setClientId(payload.clientId)
-            return
-          }
-          if (payload.type === 'peers') {
-            const peerList: string[] = Array.isArray(payload.peerIds) ? payload.peerIds : []
-            setPeers(peerList)
-            setJoinFeedback(`룸 입장 완료 · 동시 연결 ${peerList.length + 1}명`)
-            peerList.forEach((peerId) => {
-              void createOfferForPeer(peerId)
-            })
-            return
-          }
-          if (payload.type === 'peer-joined') {
-            setPeers((prev) => (prev.includes(payload.peerId) ? prev : [...prev, payload.peerId]))
-            return
-          }
-          if (payload.type === 'peer-left') {
-            setPeers((prev) => prev.filter((id) => id !== payload.peerId))
-            if (typeof payload.peerId === 'string') {
-              closePeerConnection(payload.peerId)
-              // 악기 정보 제거
-              setPeerInstruments(prev => {
-                const next = { ...prev }
-                delete next[payload.peerId]
-                return next
-              })
-            }
-            return
-          }
-          if (payload.type === 'offer' && typeof payload.from === 'string' && payload.offer) {
-            void handleRemoteOffer(payload.from, payload.offer)
-            return
-          }
-          if (payload.type === 'answer' && typeof payload.from === 'string' && payload.answer) {
-            void handleRemoteAnswer(payload.from, payload.answer)
-            return
-          }
-          if (payload.type === 'ice-candidate' && typeof payload.from === 'string' && payload.candidate) {
-            void handleRemoteCandidate(payload.from, payload.candidate)
-            return
-          }
-          // 채팅 메시지 수신
-          if (payload.type === 'chat' && typeof payload.from === 'string') {
-            setChatMessages(prev => [...prev, {
-              id: `${payload.from}-${payload.timestamp || Date.now()}`,
-              peerId: payload.from,
-              nickname: payload.nickname || `User ${payload.from.slice(0, 4)}`,
-              message: payload.message,
-              timestamp: payload.timestamp || Date.now()
-            }])
-            return
-          }
-          // 악기 정보 수신
-          if (payload.type === 'instrument' && typeof payload.from === 'string') {
-            setPeerInstruments(prev => ({
-              ...prev,
-              [payload.from]: {
-                peerId: payload.from,
-                instrument: payload.instrument,
-                nickname: payload.nickname || `User ${payload.from.slice(0, 4)}`
-              }
-            }))
-            return
-          }
-        } catch {
-          // ignore malformed payloads
+        if (payload.type === 'peers') {
+          const peerList: string[] = Array.isArray(payload.peerIds) ? payload.peerIds : []
+          console.log('[WS] Received peers:', peerList)
+          setPeers(peerList)
+          setJoinFeedback(`룸 입장 완료 · 동시 연결 ${peerList.length + 1}명`)
+          peerList.forEach((peerId) => {
+            console.log('[RTC] Creating offer for peer:', peerId.slice(0, 8))
+            void createOfferForPeer(peerId)
+          })
+          return
         }
+        if (payload.type === 'peer-joined') {
+          setPeers((prev) => (prev.includes(payload.peerId) ? prev : [...prev, payload.peerId]))
+          return
+        }
+        if (payload.type === 'peer-left') {
+          setPeers((prev) => prev.filter((id) => id !== payload.peerId))
+          if (typeof payload.peerId === 'string') {
+            closePeerConnection(payload.peerId)
+            // 악기 정보 제거
+            setPeerInstruments(prev => {
+              const next = { ...prev }
+              delete next[payload.peerId]
+              return next
+            })
+            // 네트워크 상태 제거
+            setPeerNetworkStats(prev => {
+              const next = { ...prev }
+              delete next[payload.peerId]
+              return next
+            })
+          }
+          return
+        }
+        if (payload.type === 'offer' && typeof payload.from === 'string' && payload.offer) {
+          void handleRemoteOffer(payload.from, payload.offer)
+          return
+        }
+        if (payload.type === 'answer' && typeof payload.from === 'string' && payload.answer) {
+          void handleRemoteAnswer(payload.from, payload.answer)
+          return
+        }
+        if (payload.type === 'ice-candidate' && typeof payload.from === 'string' && payload.candidate) {
+          void handleRemoteCandidate(payload.from, payload.candidate)
+          return
+        }
+        // 채팅 메시지 수신
+        if (payload.type === 'chat' && typeof payload.from === 'string') {
+          setChatMessages(prev => [...prev, {
+            id: `${payload.from}-${payload.timestamp || Date.now()}`,
+            peerId: payload.from,
+            nickname: payload.nickname || `User ${payload.from.slice(0, 4)}`,
+            message: payload.message,
+            timestamp: payload.timestamp || Date.now()
+          }])
+          return
+        }
+        // 악기 정보 수신
+        if (payload.type === 'instrument' && typeof payload.from === 'string') {
+          setPeerInstruments(prev => ({
+            ...prev,
+            [payload.from]: {
+              peerId: payload.from,
+              instrument: payload.instrument,
+              nickname: payload.nickname || `User ${payload.from.slice(0, 4)}`
+            }
+          }))
+          return
+        }
+      } catch {
+        // ignore malformed payloads
       }
+    }
 
-      return () => ws.close()
-    } catch (error) {
-      setSignalStatus('error')
+    return () => {
+      isMounted = false
+      // 연결이 완전히 열린 경우에만 close
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close()
+      } else if (ws.readyState === WebSocket.CONNECTING) {
+        // 연결 중이면 열리자마자 닫기
+        ws.onopen = () => ws.close()
+      }
     }
   }, [])
 
@@ -526,6 +627,103 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     return () => {
       teardownPeerConnections()
     }
+  }, [])
+
+  // 피어 연결 네트워크 상태 측정 (2초마다)
+  useEffect(() => {
+    const measureNetworkStats = async () => {
+      const statsUpdate: Record<string, PeerNetworkStats> = {}
+
+      for (const [peerId, pc] of peerConnections.current.entries()) {
+        // connectionState 또는 iceConnectionState로 연결 상태 확인
+        const isConnected = pc.connectionState === 'connected' ||
+                           pc.iceConnectionState === 'connected' ||
+                           pc.iceConnectionState === 'completed'
+
+        if (!isConnected) {
+          // 연결 대기 중인 피어도 표시
+          statsUpdate[peerId] = {
+            latency: null,
+            jitter: null,
+            packetsLost: 0,
+            packetLossRate: 0,
+            quality: 'unknown'
+          }
+          continue
+        }
+
+        try {
+          const stats = await pc.getStats()
+          let latency: number | null = null
+          let jitter: number | null = null
+          let packetsLost = 0
+          let packetsReceived = 0
+
+          stats.forEach((report) => {
+            // candidate-pair에서 RTT 가져오기 (여러 상태 허용)
+            if (report.type === 'candidate-pair' &&
+                (report.state === 'succeeded' || report.nominated === true)) {
+              if (typeof report.currentRoundTripTime === 'number') {
+                latency = Math.round(report.currentRoundTripTime * 1000) // ms로 변환
+              }
+            }
+
+            // remote-inbound-rtp에서도 RTT 가져오기 시도 (fallback)
+            if (report.type === 'remote-inbound-rtp' && latency === null) {
+              if (typeof report.roundTripTime === 'number') {
+                latency = Math.round(report.roundTripTime * 1000)
+              }
+            }
+
+            // inbound-rtp에서 jitter와 패킷 손실 가져오기
+            if (report.type === 'inbound-rtp' && report.kind === 'audio') {
+              if (typeof report.jitter === 'number') {
+                jitter = Math.round(report.jitter * 1000) // ms로 변환
+              }
+              if (typeof report.packetsLost === 'number') {
+                packetsLost = report.packetsLost
+              }
+              if (typeof report.packetsReceived === 'number') {
+                packetsReceived = report.packetsReceived
+              }
+            }
+          })
+
+          const totalPackets = packetsReceived + packetsLost
+          const packetLossRate = totalPackets > 0 ? (packetsLost / totalPackets) * 100 : 0
+
+          statsUpdate[peerId] = {
+            latency,
+            jitter,
+            packetsLost,
+            packetLossRate: Math.round(packetLossRate * 10) / 10,
+            quality: getNetworkQuality(latency, packetLossRate)
+          }
+        } catch (err) {
+          console.error(`Failed to get stats for peer ${peerId}:`, err)
+          statsUpdate[peerId] = {
+            latency: null,
+            jitter: null,
+            packetsLost: 0,
+            packetLossRate: 0,
+            quality: 'unknown'
+          }
+        }
+      }
+
+      if (Object.keys(statsUpdate).length > 0) {
+        setPeerNetworkStats(prev => ({ ...prev, ...statsUpdate }))
+      }
+    }
+
+    // 연결된 피어가 있을 때만 측정
+    const interval = setInterval(() => {
+      if (peerConnections.current.size > 0) {
+        measureNetworkStats()
+      }
+    }, 2000)
+
+    return () => clearInterval(interval)
   }, [])
 
   return (
@@ -561,6 +759,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         peerInstruments,
         myInstrument,
         setMyInstrument,
+        // 네트워크 상태
+        peerNetworkStats,
       }}
     >
       {children}
