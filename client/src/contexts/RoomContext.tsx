@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
 import { useAudioSettings, ActualAudioSettings } from './AudioSettingsContext'
+import { useAuth } from './AuthContext'
 
 const SIGNALING_URL = import.meta.env.VITE_SIGNALING_URL ?? 'ws://localhost:8080'
 const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -94,7 +95,6 @@ type RoomContextType = {
   chatMessages: ChatMessage[]
   sendChatMessage: (message: string) => void
   nickname: string
-  setNickname: (name: string) => void
 
   // 연주자 악기 정보
   peerInstruments: Record<string, PeerInstrument>
@@ -108,6 +108,9 @@ type RoomContextType = {
 const RoomContext = createContext<RoomContextType | null>(null)
 
 export function RoomProvider({ children }: { children: ReactNode }) {
+  // 인증된 사용자 정보 가져오기
+  const { user } = useAuth()
+
   // 오디오 설정 가져오기
   const { settings: audioSettings } = useAudioSettings()
 
@@ -271,9 +274,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
   // 채팅 상태
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
-  const [nickname, setNickname] = useState(() => {
-    return localStorage.getItem('bandspace_nickname') || `User${Math.random().toString(36).slice(2, 6)}`
-  })
+
+  // 닉네임: 로그인한 사용자의 닉네임 사용, 없으면 기본값
+  const nickname = user?.user_metadata?.nickname || `Guest${Math.random().toString(36).slice(2, 6)}`
 
   // 연주자 악기 정보 상태
   const [peerInstruments, setPeerInstruments] = useState<Record<string, PeerInstrument>>({})
@@ -702,11 +705,6 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     // 네트워크 상태 초기화
     setPeerNetworkStats({})
   }
-
-  // 닉네임 저장
-  useEffect(() => {
-    localStorage.setItem('bandspace_nickname', nickname)
-  }, [nickname])
 
   // 기본 믹서 설정
   const defaultMixSettings: MixSettings = { volume: 1, pan: 0, muted: false }
@@ -1251,7 +1249,6 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         chatMessages,
         sendChatMessage,
         nickname,
-        setNickname,
         // 연주자 악기 정보
         peerInstruments,
         myInstrument,

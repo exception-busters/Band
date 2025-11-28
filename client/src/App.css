@@ -4460,6 +4460,14 @@ body {
   width: 100px;
 }
 
+.nickname-display {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
 .chat-messages {
   flex: 1;
   overflow-y: auto;

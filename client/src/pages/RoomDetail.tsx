@@ -126,7 +126,6 @@ export function RoomDetail() {
     chatMessages,
     sendChatMessage,
     nickname,
-    setNickname,
     // 악기
     peerInstruments,
     myInstrument,
@@ -154,7 +153,6 @@ export function RoomDetail() {
   const [showRoomInfo, setShowRoomInfo] = useState(false)
   const [showInstrumentSelect, setShowInstrumentSelect] = useState(false)
   const [chatInput, setChatInput] = useState('')
-  const [editingNickname, setEditingNickname] = useState(false)
   const localPreviewRef = useRef<HTMLAudioElement | null>(null)
   const chatContainerRef = useRef<HTMLDivElement | null>(null)
   const hasJoinedRef = useRef(false)
@@ -845,21 +843,7 @@ export function RoomDetail() {
           <div className="panel-header">
             <h2>💬 채팅</h2>
             <div className="nickname-area">
-              {editingNickname ? (
-                <input
-                  type="text"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  onBlur={() => setEditingNickname(false)}
-                  onKeyDown={(e) => e.key === 'Enter' && setEditingNickname(false)}
-                  autoFocus
-                  className="nickname-input"
-                />
-              ) : (
-                <button onClick={() => setEditingNickname(true)} className="nickname-btn">
-                  {nickname} ✏️
-                </button>
-              )}
+              <span className="nickname-display">{nickname}</span>
             </div>
           </div>
 
