@@ -582,7 +582,24 @@ export function RoomDetail() {
                     </span>
                     <span className="quality-indicator">{qualityInfo.icon}</span>
                   </div>
-                  {/* 오디오는 Web Audio API (RoomContext)에서 처리 */}
+                  {/* 원격 오디오 재생 */}
+                  {hasAudioStream && (
+                    <audio
+                      autoPlay
+                      playsInline
+                      ref={(node) => {
+                        if (node && remoteAudioMap[oderId]) {
+                          if (node.srcObject !== remoteAudioMap[oderId]) {
+                            node.srcObject = remoteAudioMap[oderId]
+                          }
+                          // 볼륨 및 뮤트 적용
+                          const mix = mixSettingsMap[oderId] || { volume: 1, pan: 0, muted: false }
+                          node.volume = masterMuted ? 0 : (mix.muted ? 0 : mix.volume * masterVolume)
+                          node.play().catch(() => {})
+                        }
+                      }}
+                    />
+                  )}
                 </div>
               )
             })}

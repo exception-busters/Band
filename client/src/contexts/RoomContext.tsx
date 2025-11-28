@@ -670,11 +670,10 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         }
         panner.pan.value = settings?.pan ?? 0
 
-        // 연결: source -> analyser -> gain -> panner -> destination
+        // 연결: source -> analyser (레벨 미터링용, destination 연결 안 함)
+        // 실제 오디오 출력은 RoomDetail의 <audio> 요소가 담당
         source.connect(analyser)
-        analyser.connect(gain)
-        gain.connect(panner)
-        panner.connect(context.destination)
+        // gain/panner는 레벨 미터링에 영향을 주지 않으므로 연결하지 않음
 
         audioNodesRef.current.set(oderId, { gain, panner, analyser, context })
         console.log('[AUDIO] Created audio nodes for peer:', oderId.slice(0, 8), {
