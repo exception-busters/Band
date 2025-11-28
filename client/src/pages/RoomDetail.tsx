@@ -74,6 +74,7 @@ export function RoomDetail() {
     // 오디오 레벨
     audioLevels,
     masterLevel,
+    resumeAllAudioContexts,
     // 채팅
     chatMessages,
     sendChatMessage,
@@ -412,7 +413,7 @@ export function RoomDetail() {
   }
 
   return (
-    <div className="live-room">
+    <div className="live-room" onClick={resumeAllAudioContexts}>
       {/* 오디오 설정 모달 */}
       {showAudioSettings && (
         <AudioSettings isModal onClose={() => setShowAudioSettings(false)} />

@@ -83,6 +83,7 @@ type RoomContextType = {
   // 오디오 레벨
   audioLevels: Record<string, number>  // 각 피어별 오디오 레벨 (0-100)
   masterLevel: number                   // 마스터 오디오 레벨 (0-100)
+  resumeAllAudioContexts: () => void    // AudioContext resume (사용자 상호작용 후)
 
   // 채팅
   chatMessages: ChatMessage[]
@@ -133,6 +134,19 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const [audioLevels, setAudioLevels] = useState<Record<string, number>>({})
   const [masterLevel, setMasterLevel] = useState(0)
   const levelAnimationRef = useRef<number | null>(null)
+
+  // 모든 AudioContext resume (사용자 상호작용 후 호출)
+  const resumeAllAudioContexts = () => {
+    audioNodesRef.current.forEach((nodes, oderId) => {
+      if (nodes.context.state === 'suspended') {
+        nodes.context.resume().then(() => {
+          console.log('[AUDIO] Resumed AudioContext for peer:', oderId.slice(0, 8))
+        }).catch(err => {
+          console.error('[AUDIO] Failed to resume context:', err)
+        })
+      }
+    })
+  }
 
   // 채팅 상태
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -567,6 +581,17 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
       try {
         const context = new AudioContext()
+
+        // 브라우저 자동재생 정책으로 인해 suspended 상태일 수 있음
+        if (context.state === 'suspended') {
+          console.log('[AUDIO] AudioContext suspended, attempting to resume...')
+          context.resume().then(() => {
+            console.log('[AUDIO] AudioContext resumed successfully')
+          }).catch(err => {
+            console.error('[AUDIO] Failed to resume AudioContext:', err)
+          })
+        }
+
         const source = context.createMediaStreamSource(stream)
         const analyser = context.createAnalyser()
         const gain = context.createGain()
@@ -595,7 +620,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         panner.connect(context.destination)
 
         audioNodesRef.current.set(oderId, { gain, panner, analyser, context })
-        console.log('[AUDIO] Created audio nodes for peer:', oderId.slice(0, 8))
+        console.log('[AUDIO] Created audio nodes for peer:', oderId.slice(0, 8), 'context state:', context.state)
       } catch (err) {
         console.error('[AUDIO] Failed to create audio nodes:', err)
       }
@@ -1093,6 +1118,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         // 오디오 레벨
         audioLevels,
         masterLevel,
+        resumeAllAudioContexts,
         // 채팅
         chatMessages,
         sendChatMessage,
