@@ -4966,6 +4966,206 @@ body {
   cursor: not-allowed;
 }
 
+/* Edit Modal - Tags */
+.edit-tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.edit-tag-btn {
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-tag-btn:hover {
+  border-color: var(--accent);
+  color: white;
+}
+
+.edit-tag-btn.active {
+  background: rgba(141, 123, 255, 0.2);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.edit-custom-tag-input {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.edit-custom-tag-input input {
+  flex: 1;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: white;
+  font-size: 0.9rem;
+}
+
+.edit-custom-tag-input input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.edit-custom-tag-input button {
+  padding: 10px 16px;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.edit-custom-tag-input button:hover {
+  background: var(--accent-strong);
+}
+
+.edit-selected-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.edit-selected-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(141, 123, 255, 0.15);
+  border-radius: 12px;
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+
+.edit-selected-tag button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.edit-selected-tag button:hover {
+  opacity: 1;
+}
+
+/* Edit Modal - Instrument Slots */
+.edit-form-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.edit-instrument-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.edit-instrument-slot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.edit-slot-icon {
+  font-size: 1.5rem;
+}
+
+.edit-slot-name {
+  flex: 1;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.edit-slot-count-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.edit-slot-count-control button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-slot-count-control button:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.edit-slot-count-control button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.edit-slot-count {
+  width: 24px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.edit-slot-remove {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(248, 113, 113, 0.1);
+  color: var(--error);
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.edit-slot-remove:hover {
+  background: rgba(248, 113, 113, 0.2);
+}
+
+.edit-add-instrument select {
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: white;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.edit-add-instrument select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 /* Mobile responsive for my rooms */
 @media (max-width: 768px) {
   .rooms-header-buttons {

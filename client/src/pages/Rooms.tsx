@@ -9,6 +9,20 @@ const GENRES = [
   '일렉트로닉', '포크', '메탈', '펑크', '레게', '기타'
 ]
 
+const COMMON_TAGS = [
+  '초보환영', '경력자', '세션구함', '정기모임',
+  '즉흥연주', '커버곡', '자작곡', '녹음가능'
+]
+
+const AVAILABLE_INSTRUMENTS = [
+  { id: 'vocal', name: '보컬', icon: '🎤' },
+  { id: 'guitar', name: '기타', icon: '🎸' },
+  { id: 'bass', name: '베이스', icon: '🎸' },
+  { id: 'keyboard', name: '건반', icon: '🎹' },
+  { id: 'drums', name: '드럼', icon: '🥁' },
+  { id: 'other', name: '기타 악기', icon: '🎵' },
+]
+
 interface InstrumentSlot {
   instrument: string
   count: number
@@ -58,6 +72,9 @@ export function Rooms() {
   const [editGenre, setEditGenre] = useState('')
   const [editMaxParticipants, setEditMaxParticipants] = useState(8)
   const [editFreeJoin, setEditFreeJoin] = useState(true)
+  const [editTags, setEditTags] = useState<string[]>([])
+  const [editCustomTag, setEditCustomTag] = useState('')
+  const [editInstrumentSlots, setEditInstrumentSlots] = useState<InstrumentSlot[]>([])
   const [editSaving, setEditSaving] = useState(false)
 
   const { user } = useAuth()
@@ -126,7 +143,61 @@ export function Rooms() {
     setEditGenre(room.genre || '기타')
     setEditMaxParticipants(room.max_participants)
     setEditFreeJoin(room.free_join ?? true)
+    setEditTags(room.tags || [])
+    setEditCustomTag('')
+    setEditInstrumentSlots(room.instrument_slots || [
+      { instrument: 'vocal', count: 1 },
+      { instrument: 'guitar', count: 1 },
+      { instrument: 'bass', count: 1 },
+      { instrument: 'keyboard', count: 1 },
+      { instrument: 'drums', count: 1 },
+    ])
   }
+
+  // 태그 토글
+  const handleEditTagToggle = (tag: string) => {
+    setEditTags(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    )
+  }
+
+  // 커스텀 태그 추가
+  const handleAddEditCustomTag = () => {
+    const tag = editCustomTag.trim()
+    if (tag && !editTags.includes(tag)) {
+      setEditTags(prev => [...prev, tag])
+      setEditCustomTag('')
+    }
+  }
+
+  // 악기 슬롯 수 변경
+  const handleEditSlotCountChange = (instrument: string, count: number) => {
+    setEditInstrumentSlots(prev =>
+      prev.map(slot =>
+        slot.instrument === instrument ? { ...slot, count: Math.max(0, Math.min(10, count)) } : slot
+      )
+    )
+  }
+
+  // 악기 추가
+  const handleAddEditInstrument = (instrumentId: string) => {
+    if (!editInstrumentSlots.find(s => s.instrument === instrumentId)) {
+      setEditInstrumentSlots(prev => [...prev, { instrument: instrumentId, count: 1 }])
+    }
+  }
+
+  // 악기 제거
+  const handleRemoveEditInstrument = (instrument: string) => {
+    setEditInstrumentSlots(prev => prev.filter(s => s.instrument !== instrument))
+  }
+
+  // 추가 가능한 악기 목록
+  const editAvailableToAdd = AVAILABLE_INSTRUMENTS.filter(
+    inst => !editInstrumentSlots.find(s => s.instrument === inst.id)
+  )
+
+  // 총 악기 슬롯 수
+  const editTotalSlots = editInstrumentSlots.reduce((sum, s) => sum + s.count, 0)
 
   // 방 편집 저장
   const handleSaveEdit = async () => {
@@ -139,6 +210,9 @@ export function Rooms() {
 
     setEditSaving(true)
     try {
+      // 0개인 악기 슬롯은 제외
+      const validSlots = editInstrumentSlots.filter(s => s.count > 0)
+
       const { error } = await supabase
         .from('rooms')
         .update({
@@ -147,6 +221,8 @@ export function Rooms() {
           genre: editGenre,
           max_participants: editMaxParticipants,
           free_join: editFreeJoin,
+          tags: editTags,
+          instrument_slots: validSlots,
         })
         .eq('id', editingRoom.id)
         .eq('host_id', user.id)
@@ -163,6 +239,8 @@ export function Rooms() {
               genre: editGenre,
               max_participants: editMaxParticipants,
               free_join: editFreeJoin,
+              tags: editTags,
+              instrument_slots: validSlots,
             }
           : r
       ))
@@ -350,12 +428,13 @@ export function Rooms() {
             </div>
             <div className="modal-body">
               <div className="edit-form-group">
-                <label htmlFor="edit-title">방 제목</label>
+                <label htmlFor="edit-title">방 제목 *</label>
                 <input
                   id="edit-title"
                   type="text"
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="예: 주말 재즈 세션"
                   maxLength={100}
                 />
               </div>
@@ -368,7 +447,7 @@ export function Rooms() {
                   onChange={(e) => setEditDescription(e.target.value)}
                   rows={3}
                   maxLength={500}
-                  placeholder="합주실 설명 (선택사항)"
+                  placeholder="어떤 합주를 하고 싶으신가요? (선택사항)"
                 />
               </div>
 
@@ -400,6 +479,109 @@ export function Rooms() {
                 </div>
               </div>
 
+              {/* 태그 */}
+              <div className="edit-form-group">
+                <label>태그</label>
+                <div className="edit-tags-container">
+                  {COMMON_TAGS.map(tag => (
+                    <button
+                      key={tag}
+                      type="button"
+                      className={`edit-tag-btn ${editTags.includes(tag) ? 'active' : ''}`}
+                      onClick={() => handleEditTagToggle(tag)}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+                <div className="edit-custom-tag-input">
+                  <input
+                    type="text"
+                    placeholder="커스텀 태그 추가"
+                    value={editCustomTag}
+                    onChange={(e) => setEditCustomTag(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddEditCustomTag())}
+                    maxLength={20}
+                  />
+                  <button type="button" onClick={handleAddEditCustomTag}>추가</button>
+                </div>
+                {editTags.length > 0 && (
+                  <div className="edit-selected-tags">
+                    {editTags.map(tag => (
+                      <span key={tag} className="edit-selected-tag">
+                        {tag}
+                        <button type="button" onClick={() => handleEditTagToggle(tag)}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 악기 구성 */}
+              <div className="edit-form-group">
+                <label>악기 구성</label>
+                <p className="edit-form-hint">각 악기별 참여 가능 인원을 설정하세요 (총 {editTotalSlots}자리)</p>
+
+                <div className="edit-instrument-slots">
+                  {editInstrumentSlots.map(slot => {
+                    const instInfo = AVAILABLE_INSTRUMENTS.find(i => i.id === slot.instrument)
+                    return (
+                      <div key={slot.instrument} className="edit-instrument-slot">
+                        <span className="edit-slot-icon">{instInfo?.icon}</span>
+                        <span className="edit-slot-name">{instInfo?.name || slot.instrument}</span>
+                        <div className="edit-slot-count-control">
+                          <button
+                            type="button"
+                            onClick={() => handleEditSlotCountChange(slot.instrument, slot.count - 1)}
+                            disabled={slot.count <= 0}
+                          >
+                            -
+                          </button>
+                          <span className="edit-slot-count">{slot.count}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleEditSlotCountChange(slot.instrument, slot.count + 1)}
+                            disabled={slot.count >= 10}
+                          >
+                            +
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          className="edit-slot-remove"
+                          onClick={() => handleRemoveEditInstrument(slot.instrument)}
+                          title="악기 제거"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {editAvailableToAdd.length > 0 && (
+                  <div className="edit-add-instrument">
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          handleAddEditInstrument(e.target.value)
+                          e.target.value = ''
+                        }
+                      }}
+                      defaultValue=""
+                    >
+                      <option value="" disabled>+ 악기 추가</option>
+                      {editAvailableToAdd.map(inst => (
+                        <option key={inst.id} value={inst.id}>
+                          {inst.icon} {inst.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* 참여 방식 */}
               <div className="edit-form-group">
                 <label>참여 방식</label>
                 <div className="edit-toggle-option">
@@ -413,7 +595,7 @@ export function Rooms() {
                   </label>
                   <div className="toggle-label">
                     <strong>{editFreeJoin ? '자유 참여' : '승인 필요'}</strong>
-                    <span>{editFreeJoin ? '누구나 바로 연주자로 참여' : '방장 승인 후 연주 가능'}</span>
+                    <span>{editFreeJoin ? '누구나 바로 연주자로 참여할 수 있습니다' : '방장이 승인해야 연주자로 참여할 수 있습니다'}</span>
                   </div>
                 </div>
               </div>
