@@ -778,6 +778,53 @@ body {
   color: white;
 }
 
+/* Room Card - Tags */
+.room-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.room-card-tag {
+  padding: 3px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.room-card-tag.more {
+  background: rgba(141, 123, 255, 0.1);
+  color: var(--accent);
+}
+
+/* Room Card - Instruments */
+.room-card-instruments {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.room-card-inst {
+  font-size: 1.2rem;
+  filter: grayscale(0.3);
+  transition: filter 0.2s;
+}
+
+.room-card:hover .room-card-inst {
+  filter: grayscale(0);
+}
+
+/* Room Stats - Free/Approval */
+.stat-value.free {
+  color: var(--success);
+}
+
+.stat-value.approval {
+  color: var(--warning);
+}
+
 .login-prompt {
   text-align: center;
   padding: 32px;
@@ -4767,6 +4814,29 @@ body {
 .my-room-tag.more {
   background: rgba(141, 123, 255, 0.1);
   color: var(--accent);
+}
+
+.my-room-instruments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.my-room-inst {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+
+.my-room-join-type {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 .my-room-actions {

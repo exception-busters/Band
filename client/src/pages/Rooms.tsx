@@ -55,6 +55,9 @@ interface Room {
   musicians: number
   capacity: number
   status: RoomStatus
+  tags: string[]
+  instrumentSlots: InstrumentSlot[]
+  freeJoin: boolean
 }
 
 export function Rooms() {
@@ -284,6 +287,9 @@ export function Rooms() {
           musicians: room.current_participants,
           capacity: room.max_participants,
           status: room.status as RoomStatus,
+          tags: room.tags || [],
+          instrumentSlots: room.instrument_slots || [],
+          freeJoin: room.free_join ?? true,
         }))
 
         setRooms(formattedRooms)
@@ -387,6 +393,23 @@ export function Rooms() {
                             )}
                           </div>
                         )}
+                        {/* 악기 구성 */}
+                        {room.instrument_slots && room.instrument_slots.length > 0 && (
+                          <div className="my-room-instruments">
+                            {room.instrument_slots.filter(s => s.count > 0).map(slot => {
+                              const inst = AVAILABLE_INSTRUMENTS.find(i => i.id === slot.instrument)
+                              return (
+                                <span key={slot.instrument} className="my-room-inst" title={inst?.name}>
+                                  {inst?.icon} {slot.count}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        )}
+                        {/* 참여 방식 */}
+                        <div className="my-room-join-type">
+                          {room.free_join !== false ? '🟢 자유 참여' : '🔐 승인 필요'}
+                        </div>
                       </div>
                       <div className="my-room-actions">
                         <button
@@ -677,11 +700,43 @@ export function Rooms() {
 
               <p className="room-vibe">{room.vibe}</p>
 
+              {/* 태그 */}
+              {room.tags.length > 0 && (
+                <div className="room-card-tags">
+                  {room.tags.slice(0, 3).map(tag => (
+                    <span key={tag} className="room-card-tag">{tag}</span>
+                  ))}
+                  {room.tags.length > 3 && (
+                    <span className="room-card-tag more">+{room.tags.length - 3}</span>
+                  )}
+                </div>
+              )}
+
+              {/* 악기 구성 */}
+              {room.instrumentSlots.length > 0 && (
+                <div className="room-card-instruments">
+                  {room.instrumentSlots.filter(s => s.count > 0).map(slot => {
+                    const inst = AVAILABLE_INSTRUMENTS.find(i => i.id === slot.instrument)
+                    return (
+                      <span key={slot.instrument} className="room-card-inst" title={inst?.name}>
+                        {inst?.icon}
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
+
               <div className="room-stats">
                 <div className="stat">
                   <span className="stat-label">인원</span>
                   <span className="stat-value">
                     {room.musicians}/{room.capacity}
+                  </span>
+                </div>
+                <div className="stat">
+                  <span className="stat-label">참여</span>
+                  <span className={`stat-value ${room.freeJoin ? 'free' : 'approval'}`}>
+                    {room.freeJoin ? '자유' : '승인'}
                   </span>
                 </div>
               </div>
