@@ -566,37 +566,46 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('bandspace_nickname', nickname)
   }, [nickname])
 
+  // 기본 믹서 설정
+  const defaultMixSettings: MixSettings = { volume: 1, pan: 0, muted: false }
+
   // 개인 믹서 함수들
   const setMixVolume = (oderId: string, volume: number) => {
+    const clampedVolume = Math.max(0, Math.min(1, volume))
     setMixSettingsMap(prev => ({
       ...prev,
-      [oderId]: { ...prev[oderId], volume: Math.max(0, Math.min(1, volume)) }
+      [oderId]: { ...defaultMixSettings, ...prev[oderId], volume: clampedVolume }
     }))
     const nodes = audioNodesRef.current.get(oderId)
-    if (nodes) {
-      nodes.gain.gain.value = volume * masterVolume
+    if (nodes && !masterMuted) {
+      const settings = mixSettingsMap[oderId]
+      if (!settings?.muted) {
+        nodes.gain.gain.value = clampedVolume * masterVolume
+      }
     }
   }
 
   const setMixPan = (oderId: string, pan: number) => {
+    const clampedPan = Math.max(-1, Math.min(1, pan))
     setMixSettingsMap(prev => ({
       ...prev,
-      [oderId]: { ...prev[oderId], pan: Math.max(-1, Math.min(1, pan)) }
+      [oderId]: { ...defaultMixSettings, ...prev[oderId], pan: clampedPan }
     }))
     const nodes = audioNodesRef.current.get(oderId)
     if (nodes) {
-      nodes.panner.pan.value = pan
+      nodes.panner.pan.value = clampedPan
     }
   }
 
   const setMixMuted = (oderId: string, muted: boolean) => {
     setMixSettingsMap(prev => ({
       ...prev,
-      [oderId]: { ...prev[oderId], muted }
+      [oderId]: { ...defaultMixSettings, ...prev[oderId], muted }
     }))
     const nodes = audioNodesRef.current.get(oderId)
     if (nodes) {
-      nodes.gain.gain.value = muted ? 0 : (mixSettingsMap[oderId]?.volume ?? 1) * masterVolume
+      const settings = mixSettingsMap[oderId]
+      nodes.gain.gain.value = (muted || masterMuted) ? 0 : (settings?.volume ?? 1) * masterVolume
     }
   }
 
