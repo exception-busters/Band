@@ -864,11 +864,16 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           setPeerInstruments(instrumentsMap)
           console.log('[WS] Initialized peerInstruments:', Object.keys(instrumentsMap).length, 'performers')
 
-          // 각 피어에게 offer 전송
-          peerList.forEach((peerId) => {
-            console.log('[RTC] Creating offer for peer:', peerId.slice(0, 8))
-            void createOfferForPeer(peerId)
-          })
+          // 내가 연주 중일 때만 offer 전송 (Glare 방지)
+          // 연주자가 아닌 경우, 연주자가 participant-joined 이벤트로 offer를 보내줌
+          if (localStreamRef.current) {
+            peerList.forEach((peerId) => {
+              console.log('[RTC] Creating offer for peer:', peerId.slice(0, 8))
+              void createOfferForPeer(peerId)
+            })
+          } else {
+            console.log('[RTC] Not a performer, waiting for offers from performers')
+          }
           return
         }
 
