@@ -154,12 +154,49 @@ export function RoomDetail() {
     fetchRoom()
   }, [roomId, navigate])
 
-  // 방 입장 시 자동으로 joinRoom 호출
+  // 방 입장 시 자동으로 joinRoom 호출 + DB 참여자 수 증가
   useEffect(() => {
     if (room && roomId && signalStatus === 'connected') {
       joinRoom(roomId)
+
+      // DB 참여자 수 증가
+      const incrementParticipants = async () => {
+        if (!supabase) return
+        await supabase.rpc('increment_participants', { room_id: roomId })
+      }
+      incrementParticipants()
     }
   }, [room, roomId, signalStatus])
+
+  // 페이지 떠날 때 DB 참여자 수 감소
+  useEffect(() => {
+    if (!roomId || !supabase) return
+
+    const decrementParticipants = async () => {
+      await supabase.rpc('decrement_participants', { room_id: roomId })
+    }
+
+    // 브라우저 닫기/새로고침 시
+    const handleBeforeUnload = () => {
+      fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/decrement_participants`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({ room_id: roomId }),
+        keepalive: true
+      })
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      decrementParticipants()
+    }
+  }, [roomId])
 
   useEffect(() => {
     if (localPreviewRef.current) {
