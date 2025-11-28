@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
 import { useAudioSettings, ActualAudioSettings } from './AudioSettingsContext'
 
 const SIGNALING_URL = import.meta.env.VITE_SIGNALING_URL ?? 'ws://localhost:8080'
@@ -87,8 +87,8 @@ type RoomContextType = {
   masterLevel: number                   // 마스터 오디오 레벨 (0-100)
   resumeAllAudioContexts: () => void    // AudioContext resume (사용자 상호작용 후)
   // 오디오 요소 등록
-  registerAudioElement: (peerId: string, audioElement: HTMLAudioElement) => void
-  unregisterAudioElement: (peerId: string) => void
+  registerAudioStream: (peerId: string, stream: MediaStream) => void
+  unregisterAudioStream: (peerId: string) => void
 
   // 채팅
   chatMessages: ChatMessage[]
@@ -130,44 +130,144 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const [masterMuted, setMasterMuted] = useState(false)
   const [masterPan, setMasterPan] = useState(0)
 
-  // 오디오 요소 저장 (HTMLAudioElement로 직접 볼륨 제어)
-  const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map())
+  // Web Audio API 노드 저장 (MediaStreamAudioSourceNode 사용)
+  const audioNodesRef = useRef<Map<string, {
+    source: MediaStreamAudioSourceNode
+    gain: GainNode
+    panner: StereoPannerNode
+    analyser: AnalyserNode
+  }>>(new Map())
 
-  // audio 요소 등록 함수 (RoomDetail에서 호출)
-  const registerAudioElement = (peerId: string, audioElement: HTMLAudioElement) => {
-    const existing = audioElementsRef.current.get(peerId)
-    if (existing === audioElement) return
+  // 공유 AudioContext (한 번만 생성)
+  const audioContextRef = useRef<AudioContext | null>(null)
 
-    audioElementsRef.current.set(peerId, audioElement)
-
-    // 현재 믹서 설정 적용
-    const settings = mixSettingsMap[peerId]
-    const volume = settings?.volume ?? 1
-    const muted = settings?.muted ?? false
-    audioElement.volume = (masterMuted || muted) ? 0 : volume * masterVolume
-    console.log('[AUDIO] Registered:', peerId.slice(0, 8), 'volume:', audioElement.volume)
+  const getAudioContext = (): AudioContext => {
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      audioContextRef.current = new AudioContext()
+      console.log('[AUDIO] Created new AudioContext')
+    }
+    return audioContextRef.current
   }
 
-  // audio 요소 해제
-  const unregisterAudioElement = (peerId: string) => {
-    audioElementsRef.current.delete(peerId)
-    console.log('[AUDIO] Unregistered:', peerId.slice(0, 8))
+  // MediaStream을 Web Audio API에 연결
+  const connectToWebAudio = (peerId: string, stream: MediaStream): boolean => {
+    // 이미 이 peerId로 노드가 있으면 스킵
+    if (audioNodesRef.current.has(peerId)) {
+      console.log('[AUDIO] Already has nodes for:', peerId.slice(0, 8))
+      return true
+    }
+
+    try {
+      const context = getAudioContext()
+      console.log('[AUDIO] Creating Web Audio nodes for:', peerId.slice(0, 8), 'context state:', context.state)
+
+      // MediaStreamAudioSourceNode 사용 (재연결 가능)
+      const source = context.createMediaStreamSource(stream)
+      const analyser = context.createAnalyser()
+      const gain = context.createGain()
+      const panner = context.createStereoPanner()
+
+      analyser.fftSize = 256
+      analyser.smoothingTimeConstant = 0.8
+
+      // 현재 믹서 설정 적용
+      const settings = mixSettingsMap[peerId]
+      const volume = settings?.volume ?? 1
+      const pan = settings?.pan ?? 0
+      const muted = settings?.muted ?? false
+
+      gain.gain.value = (masterMuted || muted) ? 0 : volume * masterVolume
+      panner.pan.value = Math.max(-1, Math.min(1, pan + masterPan))
+
+      // 연결: source -> analyser -> gain -> panner -> destination
+      source.connect(analyser)
+      analyser.connect(gain)
+      gain.connect(panner)
+      panner.connect(context.destination)
+
+      audioNodesRef.current.set(peerId, { source, gain, panner, analyser })
+
+      console.log('[AUDIO] Successfully connected to Web Audio:', peerId.slice(0, 8),
+        'gain:', gain.gain.value, 'pan:', panner.pan.value,
+        'totalNodes:', audioNodesRef.current.size)
+      return true
+    } catch (err) {
+      console.error('[AUDIO] Failed to connect:', err)
+      return false
+    }
   }
+
+  // audio 스트림 등록 (RoomDetail에서 호출) - useCallback으로 안정적인 참조 유지
+  const registerAudioStream = useCallback((peerId: string, stream: MediaStream) => {
+    connectToWebAudio(peerId, stream)
+  }, [])
+
+  // 오디오 노드 해제 - useCallback으로 안정적인 참조 유지
+  const unregisterAudioStream = useCallback((peerId: string) => {
+    const nodes = audioNodesRef.current.get(peerId)
+    if (nodes) {
+      nodes.source.disconnect()
+      nodes.analyser.disconnect()
+      nodes.gain.disconnect()
+      nodes.panner.disconnect()
+      audioNodesRef.current.delete(peerId)
+      console.log('[AUDIO] Disconnected and removed nodes:', peerId.slice(0, 8))
+    }
+  }, [])
 
   // 오디오 레벨 상태
   const [audioLevels, setAudioLevels] = useState<Record<string, number>>({})
   const [masterLevel, setMasterLevel] = useState(0)
   const levelAnimationRef = useRef<number | null>(null)
 
-  // 모든 오디오 재생 시도 (사용자 상호작용 후 호출)
+  // AudioContext resume (사용자 상호작용 후 호출)
   const resumeAllAudioContexts = () => {
-    audioElementsRef.current.forEach((element, peerId) => {
-      if (element.paused) {
-        element.play().catch(() => {})
-        console.log('[AUDIO] Resumed:', peerId.slice(0, 8))
-      }
-    })
+    const context = audioContextRef.current
+    if (context && context.state === 'suspended') {
+      context.resume().then(() => {
+        console.log('[AUDIO] AudioContext resumed')
+      })
+    }
   }
+
+  // 오디오 레벨 측정 (AnalyserNode 사용)
+  useEffect(() => {
+    const measureLevels = () => {
+      const newLevels: Record<string, number> = {}
+      let maxLevel = 0
+
+      audioNodesRef.current.forEach((nodes, peerId) => {
+        const analyser = nodes.analyser
+        const dataArray = new Uint8Array(analyser.frequencyBinCount)
+        analyser.getByteFrequencyData(dataArray)
+
+        // 평균 볼륨 계산 (0-100)
+        const sum = dataArray.reduce((a, b) => a + b, 0)
+        const avg = sum / dataArray.length
+        const level = Math.min(100, Math.round((avg / 256) * 100 * 1.5)) // 1.5배 증폭
+
+        newLevels[peerId] = level
+        maxLevel = Math.max(maxLevel, level)
+      })
+
+      setAudioLevels(newLevels)
+      setMasterLevel(maxLevel)
+
+      levelAnimationRef.current = requestAnimationFrame(measureLevels)
+    }
+
+    // 오디오 노드가 있을 때만 측정 시작
+    if (audioNodesRef.current.size > 0) {
+      measureLevels()
+    }
+
+    return () => {
+      if (levelAnimationRef.current) {
+        cancelAnimationFrame(levelAnimationRef.current)
+        levelAnimationRef.current = null
+      }
+    }
+  }, [remoteAudioMap]) // remoteAudioMap이 변경될 때 재시작
 
   // 채팅 상태
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -586,8 +686,14 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     setCurrentRoomId(null)
     setJoinFeedback('')
     setChatMessages([])
-    // 오디오 요소 정리
-    audioElementsRef.current.clear()
+    // 오디오 노드 정리
+    audioNodesRef.current.forEach((nodes) => {
+      nodes.source.disconnect()
+      nodes.analyser.disconnect()
+      nodes.gain.disconnect()
+      nodes.panner.disconnect()
+    })
+    audioNodesRef.current.clear()
     setMixSettingsMap({})
     // 악기 정보 초기화
     setPeerInstruments({})
@@ -605,12 +711,24 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   // 기본 믹서 설정
   const defaultMixSettings: MixSettings = { volume: 1, pan: 0, muted: false }
 
-  // 개인 믹서 함수들 (HTMLAudioElement.volume 사용)
+  // 개인 믹서 함수들 (Web Audio API 사용)
   const setMixVolume = (peerId: string, volume: number) => {
     const clampedVolume = Math.max(0, Math.min(1, volume))
-    const element = audioElementsRef.current.get(peerId)
-    if (element && !masterMuted) {
-      element.volume = clampedVolume * masterVolume
+    const nodes = audioNodesRef.current.get(peerId)
+    const context = audioContextRef.current
+    console.log('[MIXER] setMixVolume called:', {
+      peerId: peerId.slice(0, 8),
+      volume: clampedVolume,
+      hasNodes: !!nodes,
+      contextState: context?.state,
+      nodesCount: audioNodesRef.current.size
+    })
+    if (nodes) {
+      const isMuted = masterMuted || (mixSettingsMap[peerId]?.muted ?? false)
+      nodes.gain.gain.value = isMuted ? 0 : clampedVolume * masterVolume
+      console.log('[MIXER] Volume applied:', nodes.gain.gain.value)
+    } else {
+      console.warn('[MIXER] No nodes found for peer:', peerId.slice(0, 8))
     }
     setMixSettingsMap(prev => ({
       ...prev,
@@ -620,7 +738,13 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
   const setMixPan = (peerId: string, pan: number) => {
     const clampedPan = Math.max(-1, Math.min(1, pan))
-    // 패닝은 HTMLAudioElement에서 지원하지 않음 - 설정만 저장
+    const nodes = audioNodesRef.current.get(peerId)
+    if (nodes) {
+      // 마스터 패닝과 개별 패닝을 합산 (클램핑)
+      const combinedPan = Math.max(-1, Math.min(1, clampedPan + masterPan))
+      nodes.panner.pan.value = combinedPan
+      console.log('[MIXER] Pan set for', peerId.slice(0, 8), ':', clampedPan, '+ master', masterPan, '-> pan:', combinedPan)
+    }
     setMixSettingsMap(prev => ({
       ...prev,
       [peerId]: { ...defaultMixSettings, ...prev[peerId], pan: clampedPan }
@@ -628,10 +752,12 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   }
 
   const setMixMuted = (peerId: string, muted: boolean) => {
-    const element = audioElementsRef.current.get(peerId)
+    const nodes = audioNodesRef.current.get(peerId)
     const settings = mixSettingsMap[peerId]
-    if (element) {
-      element.volume = (muted || masterMuted) ? 0 : (settings?.volume ?? 1) * masterVolume
+    if (nodes) {
+      const volume = settings?.volume ?? 1
+      nodes.gain.gain.value = (muted || masterMuted) ? 0 : volume * masterVolume
+      console.log('[MIXER] Mute set for', peerId.slice(0, 8), ':', muted, '-> gain:', nodes.gain.gain.value)
     }
     setMixSettingsMap(prev => ({
       ...prev,
@@ -639,24 +765,31 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     }))
   }
 
-  // 마스터 볼륨/뮤트 변경 시 모든 audio 요소 업데이트
+  // 마스터 볼륨/뮤트/패닝 변경 시 모든 Web Audio 노드 업데이트
   useEffect(() => {
-    audioElementsRef.current.forEach((element, peerId) => {
+    audioNodesRef.current.forEach((nodes, peerId) => {
       const settings = mixSettingsMap[peerId]
       const volume = settings?.volume ?? 1
+      const pan = settings?.pan ?? 0
       const muted = settings?.muted ?? false
-      element.volume = (masterMuted || muted) ? 0 : volume * masterVolume
-    })
-  }, [masterVolume, masterMuted, mixSettingsMap])
 
-  // remoteAudioMap 변경 시 오디오 요소 정리
+      // 볼륨 업데이트
+      nodes.gain.gain.value = (masterMuted || muted) ? 0 : volume * masterVolume
+
+      // 패닝 업데이트
+      const combinedPan = Math.max(-1, Math.min(1, pan + masterPan))
+      nodes.panner.pan.value = combinedPan
+    })
+  }, [masterVolume, masterMuted, masterPan, mixSettingsMap])
+
+  // remoteAudioMap 변경 시 오디오 노드 정리
   useEffect(() => {
-    audioElementsRef.current.forEach((_, peerId) => {
+    audioNodesRef.current.forEach((_, peerId) => {
       if (!remoteAudioMap[peerId]) {
-        unregisterAudioElement(peerId)
+        unregisterAudioStream(peerId)
       }
     })
-  }, [remoteAudioMap])
+  }, [remoteAudioMap, unregisterAudioStream])
 
 
   // 채팅 메시지 전송
@@ -1112,8 +1245,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         audioLevels,
         masterLevel,
         resumeAllAudioContexts,
-        registerAudioElement,
-        unregisterAudioElement,
+        registerAudioStream,
+        unregisterAudioStream,
         // 채팅
         chatMessages,
         sendChatMessage,

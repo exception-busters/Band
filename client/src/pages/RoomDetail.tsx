@@ -1,10 +1,52 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, memo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useRoom } from '../contexts/RoomContext'
 import { useAudioSettings } from '../contexts/AudioSettingsContext'
 import { AudioSettings } from '../components/AudioSettings'
 import { supabase } from '../lib/supabaseClient'
+
+// 안정적인 RemoteAudio 컴포넌트 (re-render 방지)
+const RemoteAudio = memo(function RemoteAudio({
+  oderId,
+  stream,
+  registerAudioStream,
+  unregisterAudioStream
+}: {
+  oderId: string
+  stream: MediaStream
+  registerAudioStream: (peerId: string, stream: MediaStream) => void
+  unregisterAudioStream: (peerId: string) => void
+}) {
+  const audioRef = useRef<HTMLAudioElement>(null)
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    console.log('[RemoteAudio] Setting up audio for:', oderId.slice(0, 8))
+
+    // MediaStream을 Web Audio API에 연결 (볼륨/패닝 제어용)
+    registerAudioStream(oderId, stream)
+
+    // audio 요소는 muted로 설정 (Web Audio가 실제 출력 담당)
+    audio.muted = true
+    audio.srcObject = stream
+
+    // 재생 시도 (브라우저 정책 충족용, 실제 소리는 Web Audio에서 출력)
+    audio.play().catch((err) => {
+      console.log('[RemoteAudio] Play failed:', err.message)
+    })
+
+    // Cleanup: 컴포넌트 unmount 또는 stream 변경 시 노드 해제
+    return () => {
+      console.log('[RemoteAudio] Cleanup - unregistering:', oderId.slice(0, 8))
+      unregisterAudioStream(oderId)
+    }
+  }, [oderId, stream, registerAudioStream, unregisterAudioStream])
+
+  return <audio ref={audioRef} playsInline style={{ display: 'none' }} />
+})
 
 // 악기 슬롯 타입
 interface InstrumentSlot {
@@ -78,7 +120,8 @@ export function RoomDetail() {
     audioLevels,
     masterLevel,
     resumeAllAudioContexts,
-    registerAudioElement,
+    registerAudioStream,
+    unregisterAudioStream,
     // 채팅
     chatMessages,
     sendChatMessage,
@@ -588,19 +631,11 @@ export function RoomDetail() {
                   </div>
                   {/* 오디오 재생 */}
                   {hasAudioStream && (
-                    <audio
-                      autoPlay
-                      playsInline
-                      style={{ display: 'none' }}
-                      ref={(node) => {
-                        if (node && remoteAudioMap[oderId]) {
-                          if (node.srcObject !== remoteAudioMap[oderId]) {
-                            node.srcObject = remoteAudioMap[oderId]
-                          }
-                          registerAudioElement(oderId, node)
-                          node.play().catch(() => {})
-                        }
-                      }}
+                    <RemoteAudio
+                      oderId={oderId}
+                      stream={remoteAudioMap[oderId]}
+                      registerAudioStream={registerAudioStream}
+                      unregisterAudioStream={unregisterAudioStream}
                     />
                   )}
                 </div>
