@@ -256,6 +256,30 @@ export function RoomDetail() {
     navigate('/rooms')
   }
 
+  // 방 삭제 (방장만 가능)
+  const handleDeleteRoom = async () => {
+    if (!isHost || !roomId || !supabase) return
+
+    const confirmed = window.confirm('정말로 이 합주실을 삭제하시겠습니까?\n삭제하면 되돌릴 수 없습니다.')
+    if (!confirmed) return
+
+    try {
+      const { error } = await supabase
+        .from('rooms')
+        .delete()
+        .eq('id', roomId)
+        .eq('host_id', user!.id) // 방장 본인만 삭제 가능
+
+      if (error) throw error
+
+      leaveRoom()
+      navigate('/rooms')
+    } catch (err) {
+      console.error('Failed to delete room:', err)
+      alert('합주실 삭제에 실패했습니다.')
+    }
+  }
+
   // 채팅 전송
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault()
@@ -326,6 +350,12 @@ export function RoomDetail() {
                 <div className="tags-list">
                   {room.tags.map((tag) => <span key={tag} className="tag">#{tag}</span>)}
                 </div>
+              )}
+              {/* 방장만 삭제 버튼 표시 */}
+              {isHost && (
+                <button onClick={handleDeleteRoom} className="delete-room-btn">
+                  🗑️ 합주실 삭제
+                </button>
               )}
             </div>
           </div>
