@@ -4154,19 +4154,31 @@ body {
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  margin-bottom: 12px;
 }
 
-.mixer-master input[type="range"] {
-  width: 100%;
+.master-control-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 8px;
 }
 
-.mixer-master .volume-value {
-  display: block;
-  text-align: center;
-  font-size: 1.2rem;
-  font-weight: 700;
+.master-control-row label {
+  width: 40px;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.master-control-row input[type="range"] {
+  flex: 1;
+}
+
+.master-control-row span {
+  width: 45px;
+  text-align: right;
+  font-size: 0.85rem;
+  font-weight: 600;
   color: var(--accent);
 }
 
@@ -4174,7 +4186,7 @@ body {
   opacity: 0.6;
 }
 
-.mixer-master.muted .volume-value {
+.mixer-master.muted .master-control-row span {
   color: var(--text-muted);
 }
 

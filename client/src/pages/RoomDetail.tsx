@@ -43,6 +43,7 @@ const RTC_STATUS_TEXT: Record<string, string> = {
   error: '에러',
 }
 
+
 export function RoomDetail() {
   const { roomId } = useParams<{ roomId: string }>()
   const { user } = useAuth()
@@ -71,10 +72,13 @@ export function RoomDetail() {
     setMasterVolume,
     masterMuted,
     toggleMasterMute,
+    masterPan,
+    setMasterPan,
     // 오디오 레벨
     audioLevels,
     masterLevel,
     resumeAllAudioContexts,
+    registerAudioElement,
     // 채팅
     chatMessages,
     sendChatMessage,
@@ -582,19 +586,18 @@ export function RoomDetail() {
                     </span>
                     <span className="quality-indicator">{qualityInfo.icon}</span>
                   </div>
-                  {/* 원격 오디오 재생 */}
+                  {/* 오디오 재생 */}
                   {hasAudioStream && (
                     <audio
                       autoPlay
                       playsInline
+                      style={{ display: 'none' }}
                       ref={(node) => {
                         if (node && remoteAudioMap[oderId]) {
                           if (node.srcObject !== remoteAudioMap[oderId]) {
                             node.srcObject = remoteAudioMap[oderId]
                           }
-                          // 볼륨 및 뮤트 적용
-                          const mix = mixSettingsMap[oderId] || { volume: 1, pan: 0, muted: false }
-                          node.volume = masterMuted ? 0 : (mix.muted ? 0 : mix.volume * masterVolume)
+                          registerAudioElement(oderId, node)
                           node.play().catch(() => {})
                         }
                       }}
@@ -641,10 +644,10 @@ export function RoomDetail() {
           </div>
 
           <div className="mixer-content">
-            {/* 마스터 볼륨 */}
+            {/* 마스터 컨트롤 */}
             <div className={`mixer-master ${masterMuted ? 'muted' : ''}`}>
               <div className="master-header">
-                <label>마스터 볼륨</label>
+                <label>마스터</label>
                 <button
                   className={`master-mute-btn ${masterMuted ? 'active' : ''}`}
                   onClick={toggleMasterMute}
@@ -653,15 +656,32 @@ export function RoomDetail() {
                   {masterMuted ? '🔇' : '🔊'}
                 </button>
               </div>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={masterVolume}
-                onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
-              />
-              <span className="volume-value">{masterMuted ? 'MUTE' : `${Math.round(masterVolume * 100)}%`}</span>
+              {/* 마스터 볼륨 */}
+              <div className="master-control-row">
+                <label>볼륨</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={masterVolume}
+                  onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
+                />
+                <span>{masterMuted ? 'MUTE' : `${Math.round(masterVolume * 100)}%`}</span>
+              </div>
+              {/* 마스터 패닝 */}
+              <div className="master-control-row">
+                <label>패닝</label>
+                <input
+                  type="range"
+                  min="-1"
+                  max="1"
+                  step="0.01"
+                  value={masterPan}
+                  onChange={(e) => setMasterPan(parseFloat(e.target.value))}
+                />
+                <span>{masterPan < 0 ? `L${Math.round(Math.abs(masterPan) * 100)}` : masterPan > 0 ? `R${Math.round(masterPan * 100)}` : 'C'}</span>
+              </div>
               {/* 마스터 레벨 미터 */}
               <div className="level-meter master-level">
                 <div className="level-bar">
