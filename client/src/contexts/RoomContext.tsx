@@ -175,6 +175,10 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       delete next[peerId]
       return next
     })
+    // 모든 연결이 닫히고 localStream도 없으면 idle로 전환
+    if (peerConnections.current.size === 0 && !localStreamRef.current) {
+      setRtcStatus('idle')
+    }
   }
 
   const createPeerConnection = (peerId: string) => {
@@ -218,9 +222,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const teardownPeerConnections = () => {
     peerConnections.current.forEach((_, peerId) => closePeerConnection(peerId))
     setRemoteAudioMap({})
-    if (!localStream) {
-      setRtcStatus('idle')
-    }
+    // rtcStatus는 피어 연결이 모두 닫힌 후 자연스럽게 idle이 됨
+    // StrictMode cleanup 시 불필요한 상태 변경 방지
   }
 
   const createOfferForPeer = async (peerId: string) => {
