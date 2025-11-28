@@ -229,8 +229,14 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       }
     }
     pc.ontrack = (event) => {
-      console.log('[RTC] ontrack received from:', peerId.slice(0, 8), 'track:', event.track.kind)
       const stream = event.streams[0] ?? new MediaStream([event.track])
+      console.log('[RTC] ontrack received from:', peerId.slice(0, 8), {
+        trackKind: event.track.kind,
+        trackEnabled: event.track.enabled,
+        trackReadyState: event.track.readyState,
+        streamId: stream.id,
+        streamActive: stream.active
+      })
       setRemoteAudioMap((prev) => ({ ...prev, [peerId]: stream }))
     }
     pc.onconnectionstatechange = () => {
@@ -671,7 +677,11 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         panner.connect(context.destination)
 
         audioNodesRef.current.set(oderId, { gain, panner, analyser, context })
-        console.log('[AUDIO] Created audio nodes for peer:', oderId.slice(0, 8), 'context state:', context.state)
+        console.log('[AUDIO] Created audio nodes for peer:', oderId.slice(0, 8), {
+          contextState: context.state,
+          gainValue: gain.gain.value,
+          streamTracks: stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState }))
+        })
       } catch (err) {
         console.error('[AUDIO] Failed to create audio nodes:', err)
       }
