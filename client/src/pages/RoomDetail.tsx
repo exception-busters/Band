@@ -269,6 +269,11 @@ export function RoomDetail() {
   const remotePerformers = Object.entries(peerInstruments).filter(([peerId]) => peerId !== clientId)
   const performerCount = (isPerformer && myInstrument ? 1 : 0) + remotePerformers.length
 
+  // 연주자가 있는지 여부에 따른 표시 상태
+  // 연주자가 없으면 항상 '대기', 있으면 실제 RTC 상태 표시
+  const hasAnyPerformer = performerCount > 0
+  const displayStatus = hasAnyPerformer ? rtcStatus : 'idle'
+
   if (loading) {
     return <div className="loading-state">합주실 정보를 불러오는 중...</div>
   }
@@ -373,8 +378,8 @@ export function RoomDetail() {
           <div className="live-title-area">
             <h1>{room.title}</h1>
             <div className="live-meta">
-              <span className={`live-badge ${rtcStatus}`}>
-                {rtcStatus === 'live' ? '● LIVE' : RTC_STATUS_TEXT[rtcStatus]}
+              <span className={`live-badge ${displayStatus}`}>
+                {displayStatus === 'live' ? '● LIVE' : RTC_STATUS_TEXT[displayStatus]}
               </span>
               <span className="genre-badge">{room.genre || '기타'}</span>
               <span className="viewer-count">👁 {peers.length + 1}명</span>
