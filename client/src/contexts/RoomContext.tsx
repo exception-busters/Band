@@ -163,6 +163,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
   const wsRef = useRef<WebSocket | null>(null)
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map())
+  // ICE candidate 큐 (remote description 설정 전에 도착한 candidate 저장)
+  const pendingIceCandidates = useRef<Map<string, RTCIceCandidateInit[]>>(new Map())
 
   // 최신 상태 참조용 ref (useEffect 클로저 내부에서 사용)
   const myInstrumentRef = useRef<string | null>(null)
@@ -278,6 +280,22 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // pending ICE candidates 적용
+  const applyPendingCandidates = async (peerId: string, pc: RTCPeerConnection) => {
+    const pending = pendingIceCandidates.current.get(peerId)
+    if (pending && pending.length > 0) {
+      console.log('[RTC] Applying', pending.length, 'pending ICE candidates for:', peerId.slice(0, 8))
+      for (const candidate of pending) {
+        try {
+          await pc.addIceCandidate(candidate)
+        } catch (err) {
+          console.error('[RTC] Failed to add pending ICE candidate:', err)
+        }
+      }
+      pendingIceCandidates.current.delete(peerId)
+    }
+  }
+
   const handleRemoteOffer = async (peerId: string, offer: RTCSessionDescriptionInit) => {
     console.log('[RTC] handleRemoteOffer from:', peerId.slice(0, 8))
     try {
@@ -303,6 +321,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       }
 
       await pc.setRemoteDescription(offer)
+      // pending ICE candidates 적용
+      await applyPendingCandidates(peerId, pc)
       attachLocalTracks(pc)
       const answer = await pc.createAnswer()
       await pc.setLocalDescription(answer)
@@ -330,6 +350,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     }
     try {
       await pc.setRemoteDescription(answer)
+      // pending ICE candidates 적용
+      await applyPendingCandidates(peerId, pc)
       console.log('[RTC] Remote answer set, connectionState:', pc.connectionState)
     } catch (error) {
       console.error('[RTC] handleRemoteAnswer error:', error)
@@ -344,12 +366,22 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       console.log('[RTC] No peer connection for:', peerId.slice(0, 8))
       return
     }
+
+    // remote description이 설정되지 않은 경우 큐에 저장
+    if (!pc.remoteDescription) {
+      console.log('[RTC] Remote description not set, queuing ICE candidate for:', peerId.slice(0, 8))
+      if (!pendingIceCandidates.current.has(peerId)) {
+        pendingIceCandidates.current.set(peerId, [])
+      }
+      pendingIceCandidates.current.get(peerId)!.push(candidate)
+      return
+    }
+
     try {
       await pc.addIceCandidate(candidate)
       console.log('[RTC] ICE candidate added, iceConnectionState:', pc.iceConnectionState)
     } catch (error) {
       console.error('[RTC] Failed to add ICE candidate:', error)
-      setRtcStatus('error')
     }
   }
 
