@@ -173,6 +173,7 @@ export function RoomDetail() {
     if (!roomId || !supabase) return
 
     const decrementParticipants = async () => {
+      if (!supabase) return
       await supabase.rpc('decrement_participants', { room_id: roomId })
     }
 
