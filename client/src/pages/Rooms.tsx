@@ -80,6 +80,9 @@ export function Rooms() {
   const [editInstrumentSlots, setEditInstrumentSlots] = useState<InstrumentSlot[]>([])
   const [editSaving, setEditSaving] = useState(false)
 
+  // 태그 확장 상태 (room id -> expanded)
+  const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set())
+
   const { user } = useAuth()
   const navigate = useNavigate()
 
@@ -341,6 +344,20 @@ export function Rooms() {
     navigate('/rooms/create')
   }
 
+  // 태그 확장/축소 토글
+  const toggleTagsExpanded = (e: React.MouseEvent, roomId: string) => {
+    e.stopPropagation() // 카드 클릭 이벤트 방지
+    setExpandedTags(prev => {
+      const next = new Set(prev)
+      if (next.has(roomId)) {
+        next.delete(roomId)
+      } else {
+        next.add(roomId)
+      }
+      return next
+    })
+  }
+
   return (
     <div className="rooms-page">
       {/* 내가 만든 방 모달 */}
@@ -385,11 +402,16 @@ export function Rooms() {
                         </div>
                         {room.tags && room.tags.length > 0 && (
                           <div className="my-room-tags">
-                            {room.tags.slice(0, 3).map(tag => (
+                            {(expandedTags.has(room.id) ? room.tags : room.tags.slice(0, 3)).map(tag => (
                               <span key={tag} className="my-room-tag">{tag}</span>
                             ))}
                             {room.tags.length > 3 && (
-                              <span className="my-room-tag more">+{room.tags.length - 3}</span>
+                              <span
+                                className="my-room-tag more clickable"
+                                onClick={(e) => toggleTagsExpanded(e, room.id)}
+                              >
+                                {expandedTags.has(room.id) ? '접기' : `+${room.tags.length - 3}`}
+                              </span>
                             )}
                           </div>
                         )}
@@ -704,11 +726,16 @@ export function Rooms() {
               <div className="room-card-tags">
                 {room.tags.length > 0 ? (
                   <>
-                    {room.tags.slice(0, 3).map(tag => (
+                    {(expandedTags.has(room.id) ? room.tags : room.tags.slice(0, 3)).map(tag => (
                       <span key={tag} className="room-card-tag">{tag}</span>
                     ))}
                     {room.tags.length > 3 && (
-                      <span className="room-card-tag more">+{room.tags.length - 3}</span>
+                      <span
+                        className="room-card-tag more clickable"
+                        onClick={(e) => toggleTagsExpanded(e, room.id)}
+                      >
+                        {expandedTags.has(room.id) ? '접기' : `+${room.tags.length - 3}`}
+                      </span>
                     )}
                   </>
                 ) : (

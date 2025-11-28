@@ -799,6 +799,16 @@ body {
   color: var(--accent);
 }
 
+.room-card-tag.more.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.room-card-tag.more.clickable:hover {
+  background: rgba(141, 123, 255, 0.25);
+  transform: scale(1.05);
+}
+
 .room-card-tag.empty {
   font-style: italic;
   opacity: 0.5;
@@ -4853,6 +4863,16 @@ body {
 .my-room-tag.more {
   background: rgba(141, 123, 255, 0.1);
   color: var(--accent);
+}
+
+.my-room-tag.more.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.my-room-tag.more.clickable:hover {
+  background: rgba(141, 123, 255, 0.25);
+  transform: scale(1.05);
 }
 
 .my-room-instruments {
