@@ -4,6 +4,16 @@ import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import { ROOM_FILTERS, type RoomStatus } from '../data/rooms'
 
+const GENRES = [
+  '록', '재즈', '블루스', '클래식', '팝', '힙합',
+  '일렉트로닉', '포크', '메탈', '펑크', '레게', '기타'
+]
+
+interface InstrumentSlot {
+  instrument: string
+  count: number
+}
+
 interface DbRoom {
   id: string
   title: string
@@ -15,6 +25,8 @@ interface DbRoom {
   genre: string | null
   tags: string[]
   created_at: string
+  free_join?: boolean
+  instrument_slots?: InstrumentSlot[]
 }
 
 interface MyRoom extends DbRoom {
@@ -38,6 +50,16 @@ export function Rooms() {
   const [showMyRooms, setShowMyRooms] = useState(false)
   const [myRooms, setMyRooms] = useState<MyRoom[]>([])
   const [myRoomsLoading, setMyRoomsLoading] = useState(false)
+
+  // 방 편집 모달 상태
+  const [editingRoom, setEditingRoom] = useState<MyRoom | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editGenre, setEditGenre] = useState('')
+  const [editMaxParticipants, setEditMaxParticipants] = useState(8)
+  const [editFreeJoin, setEditFreeJoin] = useState(true)
+  const [editSaving, setEditSaving] = useState(false)
+
   const { user } = useAuth()
   const navigate = useNavigate()
 
@@ -94,6 +116,69 @@ export function Rooms() {
     }
     setShowMyRooms(true)
     fetchMyRooms()
+  }
+
+  // 방 편집 모달 열기
+  const handleEditRoom = (room: MyRoom) => {
+    setEditingRoom(room)
+    setEditTitle(room.title)
+    setEditDescription(room.description || '')
+    setEditGenre(room.genre || '기타')
+    setEditMaxParticipants(room.max_participants)
+    setEditFreeJoin(room.free_join ?? true)
+  }
+
+  // 방 편집 저장
+  const handleSaveEdit = async () => {
+    if (!supabase || !user || !editingRoom) return
+
+    if (!editTitle.trim()) {
+      alert('방 제목을 입력하세요.')
+      return
+    }
+
+    setEditSaving(true)
+    try {
+      const { error } = await supabase
+        .from('rooms')
+        .update({
+          title: editTitle.trim(),
+          description: editDescription.trim() || null,
+          genre: editGenre,
+          max_participants: editMaxParticipants,
+          free_join: editFreeJoin,
+        })
+        .eq('id', editingRoom.id)
+        .eq('host_id', user.id)
+
+      if (error) throw error
+
+      // 내 방 목록 업데이트
+      setMyRooms(prev => prev.map(r =>
+        r.id === editingRoom.id
+          ? {
+              ...r,
+              title: editTitle.trim(),
+              description: editDescription.trim() || null,
+              genre: editGenre,
+              max_participants: editMaxParticipants,
+              free_join: editFreeJoin,
+            }
+          : r
+      ))
+      setEditingRoom(null)
+    } catch (err) {
+      console.error('Failed to update room:', err)
+      alert('방 설정 저장에 실패했습니다.')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  // 날짜 포맷팅 함수
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' })
   }
 
   // 데이터베이스에서 방 목록 불러오기
@@ -198,8 +283,32 @@ export function Rooms() {
                   {myRooms.map(room => (
                     <div key={room.id} className="my-room-item">
                       <div className="my-room-info">
-                        <h4>{room.title}</h4>
-                        <p>{room.genre || '기타'} · {room.current_participants}/{room.max_participants}명</p>
+                        <div className="my-room-header">
+                          <h4>{room.title}</h4>
+                          <span className={`my-room-status ${room.status}`}>
+                            {room.status === 'open' ? '열림' : room.status === 'recording' ? '녹음중' : '잠김'}
+                          </span>
+                        </div>
+                        {room.description && (
+                          <p className="my-room-desc">{room.description}</p>
+                        )}
+                        <div className="my-room-meta">
+                          <span className="my-room-genre">{room.genre || '기타'}</span>
+                          <span className="my-room-participants">
+                            {room.current_participants}/{room.max_participants}명
+                          </span>
+                          <span className="my-room-date">{formatDate(room.created_at)}</span>
+                        </div>
+                        {room.tags && room.tags.length > 0 && (
+                          <div className="my-room-tags">
+                            {room.tags.slice(0, 3).map(tag => (
+                              <span key={tag} className="my-room-tag">{tag}</span>
+                            ))}
+                            {room.tags.length > 3 && (
+                              <span className="my-room-tag more">+{room.tags.length - 3}</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="my-room-actions">
                         <button
@@ -207,6 +316,12 @@ export function Rooms() {
                           className="my-room-enter-btn"
                         >
                           입장
+                        </button>
+                        <button
+                          onClick={() => handleEditRoom(room)}
+                          className="my-room-edit-btn"
+                        >
+                          설정
                         </button>
                         <button
                           onClick={() => handleDeleteMyRoom(room.id)}
@@ -219,6 +334,106 @@ export function Rooms() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 방 편집 모달 */}
+      {editingRoom && (
+        <div className="room-edit-modal">
+          <div className="modal-backdrop" onClick={() => setEditingRoom(null)} />
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>합주실 설정</h2>
+              <button onClick={() => setEditingRoom(null)} className="close-btn">×</button>
+            </div>
+            <div className="modal-body">
+              <div className="edit-form-group">
+                <label htmlFor="edit-title">방 제목</label>
+                <input
+                  id="edit-title"
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  maxLength={100}
+                />
+              </div>
+
+              <div className="edit-form-group">
+                <label htmlFor="edit-description">설명</label>
+                <textarea
+                  id="edit-description"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  rows={3}
+                  maxLength={500}
+                  placeholder="합주실 설명 (선택사항)"
+                />
+              </div>
+
+              <div className="edit-form-row">
+                <div className="edit-form-group">
+                  <label htmlFor="edit-genre">장르</label>
+                  <select
+                    id="edit-genre"
+                    value={editGenre}
+                    onChange={(e) => setEditGenre(e.target.value)}
+                  >
+                    {GENRES.map(g => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="edit-form-group">
+                  <label htmlFor="edit-max">최대 인원</label>
+                  <select
+                    id="edit-max"
+                    value={editMaxParticipants}
+                    onChange={(e) => setEditMaxParticipants(Number(e.target.value))}
+                  >
+                    {[2, 4, 6, 8, 10, 12, 16, 20].map(n => (
+                      <option key={n} value={n}>{n}명</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="edit-form-group">
+                <label>참여 방식</label>
+                <div className="edit-toggle-option">
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={editFreeJoin}
+                      onChange={(e) => setEditFreeJoin(e.target.checked)}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                  <div className="toggle-label">
+                    <strong>{editFreeJoin ? '자유 참여' : '승인 필요'}</strong>
+                    <span>{editFreeJoin ? '누구나 바로 연주자로 참여' : '방장 승인 후 연주 가능'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="edit-form-actions">
+                <button
+                  onClick={() => setEditingRoom(null)}
+                  className="edit-cancel-btn"
+                  disabled={editSaving}
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  className="edit-save-btn"
+                  disabled={editSaving}
+                >
+                  {editSaving ? '저장 중...' : '저장'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

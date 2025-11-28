@@ -4656,7 +4656,8 @@ body {
 .my-room-item {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 16px;
   padding: 16px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border);
@@ -4669,20 +4670,110 @@ body {
   background: rgba(141, 123, 255, 0.05);
 }
 
+.my-room-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.my-room-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
 .my-room-info h4 {
   font-size: 1rem;
   font-weight: 600;
-  margin-bottom: 4px;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.my-room-info p {
+.my-room-status {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.my-room-status.open {
+  background: rgba(74, 222, 128, 0.2);
+  color: var(--success);
+}
+
+.my-room-status.recording {
+  background: rgba(248, 113, 113, 0.2);
+  color: var(--error);
+}
+
+.my-room-status.locked {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+}
+
+.my-room-desc {
   font-size: 0.85rem;
   color: var(--text-muted);
+  margin-bottom: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.my-room-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.my-room-genre {
+  padding: 2px 8px;
+  background: rgba(141, 123, 255, 0.15);
+  color: var(--accent);
+  border-radius: 8px;
+}
+
+.my-room-participants {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.my-room-date {
+  opacity: 0.7;
+}
+
+.my-room-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.my-room-tag {
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.my-room-tag.more {
+  background: rgba(141, 123, 255, 0.1);
+  color: var(--accent);
 }
 
 .my-room-actions {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .my-room-enter-btn {
@@ -4699,6 +4790,23 @@ body {
 
 .my-room-enter-btn:hover {
   background: var(--accent-strong);
+}
+
+.my-room-edit-btn {
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.my-room-edit-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent);
 }
 
 .my-room-delete-btn {
@@ -4718,6 +4826,146 @@ body {
   border-color: var(--error);
 }
 
+/* Room Edit Modal */
+.room-edit-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.room-edit-modal > .modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.room-edit-modal .modal-content {
+  position: relative;
+  background: var(--bg-panel);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 480px;
+  max-height: 85vh;
+  overflow: hidden;
+}
+
+.edit-form-group {
+  margin-bottom: 16px;
+}
+
+.edit-form-group label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-muted);
+}
+
+.edit-form-group input,
+.edit-form-group textarea,
+.edit-form-group select {
+  width: 100%;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: white;
+  font-size: 0.95rem;
+  transition: border-color 0.2s;
+}
+
+.edit-form-group input:focus,
+.edit-form-group textarea:focus,
+.edit-form-group select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.edit-form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.edit-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.edit-toggle-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+}
+
+.edit-toggle-option .toggle-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.edit-toggle-option .toggle-label strong {
+  font-size: 0.9rem;
+}
+
+.edit-toggle-option .toggle-label span {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.edit-form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.edit-cancel-btn {
+  flex: 1;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-cancel-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.edit-save-btn {
+  flex: 1;
+  padding: 12px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-save-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(141, 123, 255, 0.4);
+}
+
+.edit-cancel-btn:disabled,
+.edit-save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Mobile responsive for my rooms */
 @media (max-width: 768px) {
   .rooms-header-buttons {
@@ -4733,16 +4981,22 @@ body {
 
   .my-room-item {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 12px;
   }
 
   .my-room-actions {
+    flex-direction: row;
     width: 100%;
   }
 
   .my-room-enter-btn,
+  .my-room-edit-btn,
   .my-room-delete-btn {
     flex: 1;
+  }
+
+  .edit-form-row {
+    grid-template-columns: 1fr;
   }
 }
