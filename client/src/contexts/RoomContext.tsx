@@ -340,42 +340,47 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   }
 
   const handleRemoteAnswer = async (peerId: string, answer: RTCSessionDescriptionInit) => {
-    console.log('[RTC] handleRemoteAnswer from:', peerId.slice(0, 8))
+    console.log('[RTC] handleRemoteAnswer from:', peerId.slice(0, 8), 'signalingState:', peerConnections.current.get(peerId)?.signalingState)
     const pc = peerConnections.current.get(peerId)
     if (!pc) return
-    // stable 상태에서는 answer를 무시 (이미 연결 완료됨)
-    if (pc.signalingState === 'stable') {
-      console.log('[RTC] Ignoring answer - already in stable state')
+
+    // answer는 have-local-offer 상태에서만 적용 가능
+    // stable 또는 다른 상태에서는 무시 (Glare로 인해 stale answer가 도착한 경우)
+    if (pc.signalingState !== 'have-local-offer') {
+      console.log('[RTC] Ignoring answer - signalingState is not have-local-offer:', pc.signalingState)
       return
     }
+
     try {
       await pc.setRemoteDescription(answer)
       // pending ICE candidates 적용
       await applyPendingCandidates(peerId, pc)
       console.log('[RTC] Remote answer set, connectionState:', pc.connectionState)
     } catch (error) {
-      console.error('[RTC] handleRemoteAnswer error:', error)
-      setRtcStatus('error')
+      // Glare로 인한 stale answer 에러는 무시
+      console.warn('[RTC] handleRemoteAnswer error (may be stale due to glare):', error)
     }
   }
 
   const handleRemoteCandidate = async (peerId: string, candidate: RTCIceCandidateInit) => {
     // null이나 빈 candidate는 무시 (ICE gathering 완료 신호)
     if (!candidate || !candidate.candidate) {
-      console.log('[RTC] Received end-of-candidates signal from:', peerId.slice(0, 8))
       return
     }
 
-    console.log('[RTC] Received ICE candidate from:', peerId.slice(0, 8))
     const pc = peerConnections.current.get(peerId)
     if (!pc) {
-      console.log('[RTC] No peer connection for:', peerId.slice(0, 8))
+      return
+    }
+
+    // 연결이 이미 완료되었거나 실패한 경우 무시
+    if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed' ||
+        pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed') {
       return
     }
 
     // remote description이 설정되지 않은 경우 큐에 저장
     if (!pc.remoteDescription) {
-      console.log('[RTC] Remote description not set, queuing ICE candidate for:', peerId.slice(0, 8))
       if (!pendingIceCandidates.current.has(peerId)) {
         pendingIceCandidates.current.set(peerId, [])
       }
@@ -385,10 +390,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
     try {
       await pc.addIceCandidate(new RTCIceCandidate(candidate))
-      console.log('[RTC] ICE candidate added, iceConnectionState:', pc.iceConnectionState)
-    } catch (error) {
-      // 이미 연결된 경우나 stale candidate는 무시
-      console.warn('[RTC] Failed to add ICE candidate (may be stale):', error)
+    } catch {
+      // 이미 연결된 경우나 stale candidate는 조용히 무시
     }
   }
 
