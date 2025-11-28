@@ -400,7 +400,7 @@ export function Rooms() {
                               const inst = AVAILABLE_INSTRUMENTS.find(i => i.id === slot.instrument)
                               return (
                                 <span key={slot.instrument} className="my-room-inst" title={inst?.name}>
-                                  {inst?.icon} {slot.count}
+                                  {inst?.icon} <span className="inst-slot-count">0/{slot.count}</span>
                                 </span>
                               )
                             })}
@@ -701,16 +701,20 @@ export function Rooms() {
               <p className="room-vibe">{room.vibe}</p>
 
               {/* 태그 */}
-              {room.tags.length > 0 && (
-                <div className="room-card-tags">
-                  {room.tags.slice(0, 3).map(tag => (
-                    <span key={tag} className="room-card-tag">{tag}</span>
-                  ))}
-                  {room.tags.length > 3 && (
-                    <span className="room-card-tag more">+{room.tags.length - 3}</span>
-                  )}
-                </div>
-              )}
+              <div className="room-card-tags">
+                {room.tags.length > 0 ? (
+                  <>
+                    {room.tags.slice(0, 3).map(tag => (
+                      <span key={tag} className="room-card-tag">{tag}</span>
+                    ))}
+                    {room.tags.length > 3 && (
+                      <span className="room-card-tag more">+{room.tags.length - 3}</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="room-card-tag empty">태그 없음</span>
+                )}
+              </div>
 
               {/* 악기 구성 */}
               {room.instrumentSlots.length > 0 && (
@@ -719,7 +723,7 @@ export function Rooms() {
                     const inst = AVAILABLE_INSTRUMENTS.find(i => i.id === slot.instrument)
                     return (
                       <span key={slot.instrument} className="room-card-inst" title={inst?.name}>
-                        {inst?.icon}
+                        {inst?.icon} <span className="inst-slot-count">0/{slot.count}</span>
                       </span>
                     )
                   })}

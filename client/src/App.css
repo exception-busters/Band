@@ -799,21 +799,36 @@ body {
   color: var(--accent);
 }
 
+.room-card-tag.empty {
+  font-style: italic;
+  opacity: 0.5;
+}
+
 /* Room Card - Instruments */
 .room-card-instruments {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 12px;
 }
 
 .room-card-inst {
-  font-size: 1.2rem;
-  filter: grayscale(0.3);
-  transition: filter 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  font-size: 1rem;
 }
 
 .room-card:hover .room-card-inst {
-  filter: grayscale(0);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.inst-slot-count {
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 /* Room Stats - Free/Approval */
