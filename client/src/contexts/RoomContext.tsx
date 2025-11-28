@@ -204,6 +204,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       pc.close()
       peerConnections.current.delete(peerId)
     }
+    // pending ICE candidates 정리
+    pendingIceCandidates.current.delete(peerId)
     setRemoteAudioMap((prev) => {
       if (!(peerId in prev)) return prev
       const next = { ...prev }
@@ -287,9 +289,13 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       console.log('[RTC] Applying', pending.length, 'pending ICE candidates for:', peerId.slice(0, 8))
       for (const candidate of pending) {
         try {
-          await pc.addIceCandidate(candidate)
+          // null이나 빈 candidate는 건너뛰기
+          if (candidate && candidate.candidate) {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate))
+          }
         } catch (err) {
-          console.error('[RTC] Failed to add pending ICE candidate:', err)
+          // ICE candidate 에러는 무시 (이미 연결된 경우 발생할 수 있음)
+          console.warn('[RTC] Failed to add pending ICE candidate (may be stale):', err)
         }
       }
       pendingIceCandidates.current.delete(peerId)
@@ -297,15 +303,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   }
 
   const handleRemoteOffer = async (peerId: string, offer: RTCSessionDescriptionInit) => {
-    console.log('[RTC] handleRemoteOffer from:', peerId.slice(0, 8))
+    console.log('[RTC] handleRemoteOffer from:', peerId.slice(0, 8), 'signalingState:', peerConnections.current.get(peerId)?.signalingState || 'none')
     try {
       const pc = ensurePeerConnection(peerId)
-
-      // 이미 연결이 진행 중이거나 완료된 경우 중복 offer 무시
-      if (pc.signalingState === 'stable' && pc.iceConnectionState !== 'new' && pc.iceConnectionState !== 'closed') {
-        console.log('[RTC] Ignoring duplicate offer - connection already in progress, iceState:', pc.iceConnectionState)
-        return
-      }
 
       // Glare 처리: 양쪽에서 동시에 offer를 보낸 경우
       if (pc.signalingState === 'have-local-offer') {
@@ -360,6 +360,12 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   }
 
   const handleRemoteCandidate = async (peerId: string, candidate: RTCIceCandidateInit) => {
+    // null이나 빈 candidate는 무시 (ICE gathering 완료 신호)
+    if (!candidate || !candidate.candidate) {
+      console.log('[RTC] Received end-of-candidates signal from:', peerId.slice(0, 8))
+      return
+    }
+
     console.log('[RTC] Received ICE candidate from:', peerId.slice(0, 8))
     const pc = peerConnections.current.get(peerId)
     if (!pc) {
@@ -378,10 +384,11 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      await pc.addIceCandidate(candidate)
+      await pc.addIceCandidate(new RTCIceCandidate(candidate))
       console.log('[RTC] ICE candidate added, iceConnectionState:', pc.iceConnectionState)
     } catch (error) {
-      console.error('[RTC] Failed to add ICE candidate:', error)
+      // 이미 연결된 경우나 stale candidate는 무시
+      console.warn('[RTC] Failed to add ICE candidate (may be stale):', error)
     }
   }
 
