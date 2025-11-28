@@ -3178,13 +3178,17 @@ body {
   margin-bottom: 24px;
 }
 
-/* Navigation Settings Link */
+/* Navigation Settings Button */
 .nav-settings {
   font-size: 1.25rem;
   padding: 8px;
   text-decoration: none;
   opacity: 0.8;
   transition: opacity 0.2s;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
 }
 
 .nav-settings:hover {

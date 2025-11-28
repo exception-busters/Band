@@ -1,9 +1,12 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { AudioSettings } from './AudioSettings'
 
 export function Navigation() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
+  const [showAudioSettings, setShowAudioSettings] = useState(false)
 
   const handleSignOut = async () => {
     try {
@@ -16,6 +19,11 @@ export function Navigation() {
 
   return (
     <nav className="top-nav">
+      {/* 오디오 설정 모달 */}
+      {showAudioSettings && (
+        <AudioSettings isModal onClose={() => setShowAudioSettings(false)} />
+      )}
+
       <div className="brand">
         <Link to="/">
           <span>BandSpace</span>
@@ -30,9 +38,13 @@ export function Navigation() {
         <Link to="/community">커뮤니티</Link>
       </div>
       <div className="nav-actions">
-        <Link to="/settings/audio" className="nav-settings" title="오디오 설정">
+        <button
+          onClick={() => setShowAudioSettings(true)}
+          className="nav-settings"
+          title="오디오 설정"
+        >
           🎛️
-        </Link>
+        </button>
         {user ? (
           <div className="user-menu">
             <span className="user-email">{user.email}</span>
