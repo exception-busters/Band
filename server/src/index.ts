@@ -11,6 +11,7 @@ interface Client {
 	nickname: string;
 	instrument?: string;
 	isPerforming: boolean;
+	isHost: boolean;
 }
 
 // 참여자 정보 (클라이언트에 전송용)
@@ -19,6 +20,7 @@ interface Participant {
 	nickname: string;
 	instrument?: string;
 	isPerforming: boolean;
+	isHost: boolean;
 }
 
 const wss = new WebSocketServer({ port: PORT });
@@ -44,7 +46,8 @@ function getRoomParticipants(roomId: string): Participant[] {
 				oderId: client.id,
 				nickname: client.nickname,
 				instrument: client.instrument,
-				isPerforming: client.isPerforming
+				isPerforming: client.isPerforming,
+				isHost: client.isHost
 			});
 		}
 	}
@@ -78,7 +81,8 @@ wss.on('connection', (ws) => {
 		id,
 		ws,
 		nickname: `User${id.slice(0, 4)}`,
-		isPerforming: false
+		isPerforming: false,
+		isHost: false
 	};
 	clients.set(id, client);
 	console.log(`[CONNECT] Client ${id.slice(0, 8)} connected. Total clients: ${clients.size}`);
@@ -94,13 +98,18 @@ wss.on('connection', (ws) => {
 				if (msg.nickname) {
 					client.nickname = msg.nickname;
 				}
+				// 방장 여부 설정
+				if (msg.isHost === true) {
+					client.isHost = true;
+				}
+				console.log(`[JOIN-DEBUG] Client ${id.slice(0, 8)} joining with isHost: ${msg.isHost} (type: ${typeof msg.isHost}), stored: ${client.isHost}`);
 
 				client.roomId = msg.roomId;
 				if (!rooms.has(msg.roomId)) rooms.set(msg.roomId, new Set());
 				rooms.get(msg.roomId)!.add(id);
 
 				const participants = getRoomParticipants(msg.roomId);
-				console.log(`[JOIN] Client ${id.slice(0, 8)} (${client.nickname}) joined room ${msg.roomId.slice(0, 8)}. Room size: ${participants.length}`);
+				console.log(`[JOIN] Client ${id.slice(0, 8)} (${client.nickname}) joined room ${msg.roomId.slice(0, 8)}. Room size: ${participants.length}${client.isHost ? ' [HOST]' : ''}`);
 
 				// 기존 피어들에게 새 참여자 알림
 				broadcastToRoom(msg.roomId, id, {
@@ -109,7 +118,8 @@ wss.on('connection', (ws) => {
 						oderId: id,
 						nickname: client.nickname,
 						instrument: client.instrument,
-						isPerforming: client.isPerforming
+						isPerforming: client.isPerforming,
+						isHost: client.isHost
 					}
 				});
 
@@ -127,8 +137,12 @@ wss.on('connection', (ws) => {
 				client.isPerforming = true;
 				client.instrument = msg.instrument;
 				if (msg.nickname) client.nickname = msg.nickname;
+				// isHost가 메시지에 포함되어 있으면 업데이트
+				if (msg.isHost === true) {
+					client.isHost = true;
+				}
 
-				console.log(`[START-PERFORMING] ${id.slice(0, 8)} (${client.nickname}) started performing: ${client.instrument}`);
+				console.log(`[START-PERFORMING] ${id.slice(0, 8)} (${client.nickname}) started performing: ${client.instrument}, isHost: ${client.isHost}`);
 
 				// 방의 모든 피어에게 알림
 				broadcastToRoom(client.roomId, id, {
@@ -136,7 +150,8 @@ wss.on('connection', (ws) => {
 					oderId: id,
 					nickname: client.nickname,
 					instrument: client.instrument,
-					isPerforming: true
+					isPerforming: true,
+					isHost: client.isHost
 				});
 				return;
 			}

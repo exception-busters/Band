@@ -88,7 +88,7 @@ const RTC_STATUS_TEXT: Record<string, string> = {
 
 export function RoomDetail() {
   const { roomId } = useParams<{ roomId: string }>()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
   const {
     signalStatus,
@@ -211,9 +211,15 @@ export function RoomDetail() {
 
   // 방 입장 시 자동으로 joinRoom 호출 + DB 참여자 수 증가
   useEffect(() => {
+    // 인증 로딩이 완료될 때까지 대기 (isHost 정확히 계산하기 위해)
+    if (authLoading) return
+
     if (room && roomId && signalStatus === 'connected' && !hasJoinedRef.current) {
       hasJoinedRef.current = true
-      joinRoom(roomId)
+      // isHost를 여기서 다시 계산 (최신 user 상태 반영)
+      const hostFlag = user && room.host_id === user.id
+      joinRoom(roomId, hostFlag || false)
+      console.log('[ROOM] Joining room with isHost:', hostFlag, 'user:', user?.id, 'host_id:', room.host_id)
 
       // DB 참여자 수 증가
       const incrementParticipants = async () => {
@@ -231,7 +237,7 @@ export function RoomDetail() {
       }
       incrementParticipants()
     }
-  }, [room, roomId, signalStatus])
+  }, [room, roomId, signalStatus, authLoading, user, joinRoom])
 
   // 페이지 떠날 때 DB 참여자 수 감소
   useEffect(() => {
@@ -341,7 +347,7 @@ export function RoomDetail() {
   // 악기 선택 후 연주 시작
   const handleSelectInstrument = async (instrumentId: string) => {
     setShowInstrumentSelect(false)
-    setMyInstrument(instrumentId)
+    setMyInstrument(instrumentId, isHost || false)
     setIsPerformer(true)
 
     try {
@@ -611,13 +617,14 @@ export function RoomDetail() {
               return (
                 <div key={oderId} className={`performer-item ${hasAudioStream ? 'active' : 'connecting'}`}>
                   <div className="performer-avatar">
+                    {peerInfo.isHost && <span className="host-crown">👑</span>}
                     <div className="avatar-circle">
                       <span>{instInfo.icon}</span>
                     </div>
                     {hasAudioStream && <span className="live-indicator" />}
                   </div>
                   <div className="performer-info">
-                    <span className="performer-name">{peerInfo.nickname || `연주자 ${oderId.slice(0, 4)}`}</span>
+                    <span className="performer-name">{peerInfo.nickname || `연주자 ${oderId.slice(0, 4)}`} {peerInfo.isHost && '(방장)'}</span>
                     <span className="performer-instrument">{instInfo.name}</span>
                   </div>
                   {/* 네트워크 상태 표시 */}

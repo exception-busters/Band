@@ -29,6 +29,7 @@ export interface PeerInstrument {
   peerId: string
   instrument: string
   nickname: string
+  isHost: boolean
 }
 
 // 피어 네트워크 상태
@@ -54,7 +55,7 @@ type RoomContextType = {
   signalStatus: SignalStatus
   clientId: string | null
   peers: string[]
-  joinRoom: (roomId: string) => void
+  joinRoom: (roomId: string, isHost?: boolean) => void
   joinFeedback: string
 
   // WebRTC
@@ -99,7 +100,7 @@ type RoomContextType = {
   // 연주자 악기 정보
   peerInstruments: Record<string, PeerInstrument>
   myInstrument: string | null
-  setMyInstrument: (instrument: string) => void
+  setMyInstrument: (instrument: string, isHost?: boolean) => void
 
   // 네트워크 상태
   peerNetworkStats: Record<string, PeerNetworkStats>
@@ -670,12 +671,12 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     console.log('[AUDIO] Master muted:', newMuted)
   }
 
-  const joinRoom = (roomId: string) => {
+  const joinRoom = (roomId: string, isHost?: boolean) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       setJoinFeedback('시그널링 서버 연결을 확인하세요.')
       return
     }
-    wsRef.current.send(JSON.stringify({ type: 'join', roomId, nickname }))
+    wsRef.current.send(JSON.stringify({ type: 'join', roomId, nickname, isHost: isHost || false }))
     setCurrentRoomId(roomId)
     setJoinFeedback('룸 입장 시도 중...')
   }
@@ -813,7 +814,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   }
 
   // 내 악기 설정 및 연주 시작 알림
-  const setMyInstrument = (instrument: string) => {
+  const setMyInstrument = (instrument: string, isHost?: boolean) => {
     setMyInstrumentState(instrument)
     myInstrumentRef.current = instrument
 
@@ -822,15 +823,17 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       wsRef.current.send(JSON.stringify({
         type: 'start-performing',
         instrument,
-        nickname
+        nickname,
+        isHost: isHost || false
       }))
+      console.log('[WS] Sent start-performing with isHost:', isHost)
     }
 
     // 내 악기 정보도 peerInstruments에 추가
     if (clientId) {
       setPeerInstruments(prev => ({
         ...prev,
-        [clientId]: { peerId: clientId, instrument, nickname }
+        [clientId]: { peerId: clientId, instrument, nickname, isHost: isHost || false }
       }))
     }
   }
@@ -906,7 +909,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
               instrumentsMap[p.oderId] = {
                 peerId: p.oderId,
                 instrument: p.instrument,
-                nickname: p.nickname
+                nickname: p.nickname,
+                isHost: p.isHost || false
               }
             }
           }
@@ -939,7 +943,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
               [participant.oderId]: {
                 peerId: participant.oderId,
                 instrument: participant.instrument,
-                nickname: participant.nickname
+                nickname: participant.nickname,
+                isHost: participant.isHost || false
               }
             }))
           }
@@ -975,8 +980,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
         // 연주자 상태 업데이트 (연주 시작/중단)
         if (payload.type === 'performer-updated' && typeof payload.oderId === 'string') {
-          const { oderId, nickname: peerNickname, instrument, isPerforming } = payload
-          console.log('[WS] Performer updated:', oderId.slice(0, 8), isPerforming ? 'started' : 'stopped', instrument)
+          const { oderId, nickname: peerNickname, instrument, isPerforming, isHost: peerIsHost } = payload
+          console.log('[WS] Performer updated:', oderId.slice(0, 8), isPerforming ? 'started' : 'stopped', instrument, 'isHost:', peerIsHost)
 
           if (isPerforming && instrument) {
             // 연주 시작
@@ -985,7 +990,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
               [oderId]: {
                 peerId: oderId,
                 instrument,
-                nickname: peerNickname || `User ${oderId.slice(0, 4)}`
+                nickname: peerNickname || `User ${oderId.slice(0, 4)}`,
+                isHost: peerIsHost || false
               }
             }))
 
