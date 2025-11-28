@@ -262,9 +262,9 @@ export function RoomDetail() {
     }
   }
 
-  // 현재 연주 중인 사람들
-  const remoteAudioEntries = Object.entries(remoteAudioMap)
-  const performerCount = (localStream ? 1 : 0) + remoteAudioEntries.length
+  // 현재 연주 중인 사람들 (peerInstruments 기반, 자신 제외)
+  const remotePerformers = Object.entries(peerInstruments).filter(([peerId]) => peerId !== clientId)
+  const performerCount = (isPerformer && myInstrument ? 1 : 0) + remotePerformers.length
 
   if (loading) {
     return <div className="loading-state">합주실 정보를 불러오는 중...</div>
@@ -424,45 +424,47 @@ export function RoomDetail() {
               </div>
             )}
 
-            {/* 다른 연주자들 */}
-            {remoteAudioEntries.map(([oderId, stream]) => {
-              const peerInfo = peerInstruments[oderId]
-              const instInfo = peerInfo ? INSTRUMENT_INFO[peerInfo.instrument] : null
+            {/* 다른 연주자들 (peerInstruments 기반) */}
+            {remotePerformers.map(([oderId, peerInfo]) => {
+              const instInfo = INSTRUMENT_INFO[peerInfo.instrument] || { icon: '🎵', name: peerInfo.instrument }
               const netStats = peerNetworkStats[oderId]
               const qualityInfo = QUALITY_ICONS[netStats?.quality || 'unknown']
+              const hasAudioStream = remoteAudioMap[oderId] !== undefined
 
               return (
-                <div key={oderId} className="performer-item active">
+                <div key={oderId} className={`performer-item ${hasAudioStream ? 'active' : 'connecting'}`}>
                   <div className="performer-avatar">
                     <div className="avatar-circle">
-                      <span>{instInfo?.icon || '🎵'}</span>
+                      <span>{instInfo.icon}</span>
                     </div>
-                    <span className="live-indicator" />
+                    {hasAudioStream && <span className="live-indicator" />}
                   </div>
                   <div className="performer-info">
-                    <span className="performer-name">{peerInfo?.nickname || `연주자 ${oderId.slice(0, 4)}`}</span>
-                    <span className="performer-instrument">{instInfo?.name || '연주 중'}</span>
+                    <span className="performer-name">{peerInfo.nickname || `연주자 ${oderId.slice(0, 4)}`}</span>
+                    <span className="performer-instrument">{instInfo.name}</span>
                   </div>
                   {/* 네트워크 상태 표시 */}
                   <div className="performer-latency" title={`레이턴시: ${netStats?.latency ?? '?'}ms | 지터: ${netStats?.jitter ?? '?'}ms | 품질: ${qualityInfo.label}`}>
                     <span className="latency-value" style={{ color: qualityInfo.color }}>
-                      {netStats?.latency != null ? `${netStats.latency}ms` : '--'}
+                      {hasAudioStream ? (netStats?.latency != null ? `${netStats.latency}ms` : '--') : '연결 중'}
                     </span>
                     <span className="quality-indicator">{qualityInfo.icon}</span>
                   </div>
-                  <audio
-                    autoPlay
-                    playsInline
-                    ref={(node) => {
-                      if (node && stream) {
-                        node.srcObject = stream
-                        // 브라우저 자동 재생 정책 우회
-                        node.play().catch(err => {
-                          console.log('Audio play failed:', err)
-                        })
-                      }
-                    }}
-                  />
+                  {/* 오디오 스트림이 있을 때만 audio 요소 렌더링 */}
+                  {hasAudioStream && (
+                    <audio
+                      autoPlay
+                      playsInline
+                      ref={(node) => {
+                        if (node && remoteAudioMap[oderId]) {
+                          node.srcObject = remoteAudioMap[oderId]
+                          node.play().catch(err => {
+                            console.log('Audio play failed:', err)
+                          })
+                        }
+                      }}
+                    />
+                  )}
                 </div>
               )
             })}
@@ -540,19 +542,20 @@ export function RoomDetail() {
                 </div>
               )}
 
-              {/* 다른 연주자들 */}
-              {remoteAudioEntries.map(([oderId]) => {
+              {/* 다른 연주자들 (오디오 스트림이 있는 연주자만 믹서에 표시) */}
+              {remotePerformers
+                .filter(([oderId]) => remoteAudioMap[oderId] !== undefined)
+                .map(([oderId, peerInfo]) => {
                 const mix = mixSettingsMap[oderId] || { volume: 1, pan: 0, muted: false }
-                const peerInfo = peerInstruments[oderId]
-                const instInfo = peerInfo ? INSTRUMENT_INFO[peerInfo.instrument] : null
+                const instInfo = INSTRUMENT_INFO[peerInfo.instrument] || { icon: '🎵', name: peerInfo.instrument }
                 const netStats = peerNetworkStats[oderId]
                 const qualityInfo = QUALITY_ICONS[netStats?.quality || 'unknown']
 
                 return (
                   <div key={oderId} className={`mixer-channel ${mix.muted ? 'muted' : ''}`}>
                     <div className="channel-header">
-                      <span className="channel-icon">{instInfo?.icon || '🎵'}</span>
-                      <span className="channel-name">{peerInfo?.nickname || `연주자 ${oderId.slice(0, 4)}`}</span>
+                      <span className="channel-icon">{instInfo.icon}</span>
+                      <span className="channel-name">{peerInfo.nickname || `연주자 ${oderId.slice(0, 4)}`}</span>
                       <button
                         className={`mute-btn ${mix.muted ? 'active' : ''}`}
                         onClick={() => setMixMuted(oderId, !mix.muted)}
@@ -600,7 +603,7 @@ export function RoomDetail() {
                 )
               })}
 
-              {remoteAudioEntries.length === 0 && !localStream && (
+              {remotePerformers.filter(([oderId]) => remoteAudioMap[oderId]).length === 0 && !localStream && (
                 <div className="mixer-empty">
                   <p>연주자가 없습니다</p>
                   <small>연주자가 참여하면 여기서 볼륨을 조절할 수 있습니다</small>

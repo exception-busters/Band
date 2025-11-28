@@ -131,22 +131,30 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const wsRef = useRef<WebSocket | null>(null)
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map())
 
+  // 최신 상태 참조용 ref (useEffect 클로저 내부에서 사용)
+  const myInstrumentRef = useRef<string | null>(null)
+  const nicknameRef = useRef<string>(nickname)
+  const localStreamRef = useRef<MediaStream | null>(null)
+  const clientIdRef = useRef<string | null>(null)
+
   const sendSignalMessage = (payload: Record<string, unknown>) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(payload))
     }
   }
 
-  const attachLocalTracks = (pc: RTCPeerConnection, stream: MediaStream | null = localStream) => {
-    if (!stream) {
+  const attachLocalTracks = (pc: RTCPeerConnection, stream?: MediaStream | null) => {
+    // ref를 사용하여 항상 최신 localStream 사용
+    const streamToUse = stream !== undefined ? stream : localStreamRef.current
+    if (!streamToUse) {
       console.log('[RTC] attachLocalTracks: No stream available!')
       return
     }
-    console.log('[RTC] attachLocalTracks: Adding', stream.getTracks().length, 'tracks')
-    stream.getTracks().forEach((track) => {
+    console.log('[RTC] attachLocalTracks: Adding', streamToUse.getTracks().length, 'tracks')
+    streamToUse.getTracks().forEach((track) => {
       const already = pc.getSenders().some((sender) => sender.track === track)
       if (!already) {
-        pc.addTrack(track, stream)
+        pc.addTrack(track, streamToUse)
         console.log('[RTC] Track added:', track.kind)
       }
     })
@@ -238,6 +246,20 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     console.log('[RTC] handleRemoteOffer from:', peerId.slice(0, 8))
     try {
       const pc = ensurePeerConnection(peerId)
+
+      // Glare 처리: 양쪽에서 동시에 offer를 보낸 경우
+      if (pc.signalingState === 'have-local-offer') {
+        // clientId가 더 큰 쪽이 자신의 offer를 유지 (polite peer 패턴)
+        const myId = clientIdRef.current
+        if (myId && myId > peerId) {
+          console.log('[RTC] Glare detected: ignoring incoming offer (we have priority)')
+          return
+        }
+        // 상대방이 우선순위가 높으면 내 offer를 롤백
+        console.log('[RTC] Glare detected: rolling back local offer')
+        await pc.setLocalDescription({ type: 'rollback' })
+      }
+
       await pc.setRemoteDescription(offer)
       attachLocalTracks(pc)
       const answer = await pc.createAnswer()
@@ -259,6 +281,11 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     console.log('[RTC] handleRemoteAnswer from:', peerId.slice(0, 8))
     const pc = peerConnections.current.get(peerId)
     if (!pc) return
+    // stable 상태에서는 answer를 무시 (이미 연결 완료됨)
+    if (pc.signalingState === 'stable') {
+      console.log('[RTC] Ignoring answer - already in stable state')
+      return
+    }
     try {
       await pc.setRemoteDescription(answer)
       console.log('[RTC] Remote answer set, connectionState:', pc.connectionState)
@@ -327,8 +354,13 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       // 기존 peer connection에 트랙 추가하고 renegotiation
       if (peerConnections.current.size > 0) {
         console.log('[RTC] Adding tracks to existing peer connections')
+        let hasConnectedPeer = false
         for (const [peerId, pc] of peerConnections.current.entries()) {
           attachLocalTracks(pc, stream)
+          // 이미 연결된 피어가 있는지 확인
+          if (pc.connectionState === 'connected') {
+            hasConnectedPeer = true
+          }
           // offer 다시 생성해서 보내기
           try {
             const offer = await pc.createOffer()
@@ -339,7 +371,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
             console.error('[RTC] Renegotiation failed:', err)
           }
         }
-        setRtcStatus('connecting')
+        // 이미 연결된 피어가 있으면 live 유지
+        setRtcStatus(hasConnectedPeer ? 'live' : 'connecting')
       } else {
         setRtcStatus('live')
       }
@@ -376,7 +409,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       setJoinFeedback('시그널링 서버 연결을 확인하세요.')
       return
     }
-    wsRef.current.send(JSON.stringify({ type: 'join', roomId }))
+    wsRef.current.send(JSON.stringify({ type: 'join', roomId, nickname }))
     setCurrentRoomId(roomId)
     setJoinFeedback('룸 입장 시도 중...')
   }
@@ -397,6 +430,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     // 악기 정보 초기화
     setPeerInstruments({})
     setMyInstrumentState(null)
+    myInstrumentRef.current = null
     // 네트워크 상태 초기화
     setPeerNetworkStats({})
   }
@@ -472,13 +506,15 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     }])
   }
 
-  // 내 악기 설정 및 브로드캐스트
+  // 내 악기 설정 및 연주 시작 알림
   const setMyInstrument = (instrument: string) => {
     setMyInstrumentState(instrument)
+    myInstrumentRef.current = instrument
 
+    // 서버에 연주 시작 알림 (서버가 방 전체에 브로드캐스트)
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
-        type: 'instrument',
+        type: 'start-performing',
         instrument,
         nickname
       }))
@@ -492,6 +528,16 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       }))
     }
   }
+
+  // nickname 변경 시 ref 업데이트
+  useEffect(() => {
+    nicknameRef.current = nickname
+  }, [nickname])
+
+  // localStream 변경 시 ref 업데이트
+  useEffect(() => {
+    localStreamRef.current = localStream
+  }, [localStream])
 
   // WebSocket setup
   useEffect(() => {
@@ -530,40 +576,145 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         const payload = JSON.parse(event.data)
         if (payload.type === 'welcome') {
           setClientId(payload.clientId)
+          clientIdRef.current = payload.clientId
           return
         }
-        if (payload.type === 'peers') {
+        // 새로운 서버 메시지: 방 상태 (입장 시 수신)
+        if (payload.type === 'room-state') {
           const peerList: string[] = Array.isArray(payload.peerIds) ? payload.peerIds : []
-          console.log('[WS] Received peers:', peerList)
+          const participants = Array.isArray(payload.participants) ? payload.participants : []
+          console.log('[WS] Received room-state, peers:', peerList.length, 'participants:', participants.length)
+
           setPeers(peerList)
           setJoinFeedback(`룸 입장 완료 · 동시 연결 ${peerList.length + 1}명`)
+
+          // 참여자 정보로 peerInstruments 초기화 (연주 중인 사람만)
+          const instrumentsMap: Record<string, PeerInstrument> = {}
+          for (const p of participants) {
+            if (p.isPerforming && p.instrument) {
+              instrumentsMap[p.oderId] = {
+                peerId: p.oderId,
+                instrument: p.instrument,
+                nickname: p.nickname
+              }
+            }
+          }
+          setPeerInstruments(instrumentsMap)
+          console.log('[WS] Initialized peerInstruments:', Object.keys(instrumentsMap).length, 'performers')
+
+          // 각 피어에게 offer 전송
           peerList.forEach((peerId) => {
             console.log('[RTC] Creating offer for peer:', peerId.slice(0, 8))
             void createOfferForPeer(peerId)
           })
           return
         }
-        if (payload.type === 'peer-joined') {
-          setPeers((prev) => (prev.includes(payload.peerId) ? prev : [...prev, payload.peerId]))
+
+        // 새로운 참여자 입장
+        if (payload.type === 'participant-joined' && payload.participant) {
+          const participant = payload.participant
+          console.log('[WS] Participant joined:', participant.oderId?.slice(0, 8), participant.nickname)
+          setPeers((prev) => (prev.includes(participant.oderId) ? prev : [...prev, participant.oderId]))
+
+          // 연주 중인 참여자라면 악기 정보 추가
+          if (participant.isPerforming && participant.instrument) {
+            setPeerInstruments(prev => ({
+              ...prev,
+              [participant.oderId]: {
+                peerId: participant.oderId,
+                instrument: participant.instrument,
+                nickname: participant.nickname
+              }
+            }))
+          }
+
+          // 내가 연주 중이면 새 참여자에게 offer 전송 (오디오를 보내기 위해)
+          if (localStreamRef.current) {
+            console.log('[RTC] I have localStream, creating offer for new participant:', participant.oderId?.slice(0, 8))
+            void createOfferForPeer(participant.oderId)
+          }
           return
         }
-        if (payload.type === 'peer-left') {
-          setPeers((prev) => prev.filter((id) => id !== payload.peerId))
-          if (typeof payload.peerId === 'string') {
-            closePeerConnection(payload.peerId)
-            // 악기 정보 제거
+
+        // 참여자 퇴장
+        if (payload.type === 'participant-left' && typeof payload.oderId === 'string') {
+          const peerId = payload.oderId
+          console.log('[WS] Participant left:', peerId.slice(0, 8))
+          setPeers((prev) => prev.filter((id) => id !== peerId))
+          closePeerConnection(peerId)
+          // 악기 정보 제거
+          setPeerInstruments(prev => {
+            const next = { ...prev }
+            delete next[peerId]
+            return next
+          })
+          // 네트워크 상태 제거
+          setPeerNetworkStats(prev => {
+            const next = { ...prev }
+            delete next[peerId]
+            return next
+          })
+          return
+        }
+
+        // 연주자 상태 업데이트 (연주 시작/중단)
+        if (payload.type === 'performer-updated' && typeof payload.oderId === 'string') {
+          const { oderId, nickname: peerNickname, instrument, isPerforming } = payload
+          console.log('[WS] Performer updated:', oderId.slice(0, 8), isPerforming ? 'started' : 'stopped', instrument)
+
+          if (isPerforming && instrument) {
+            // 연주 시작
+            setPeerInstruments(prev => ({
+              ...prev,
+              [oderId]: {
+                peerId: oderId,
+                instrument,
+                nickname: peerNickname || `User ${oderId.slice(0, 4)}`
+              }
+            }))
+          } else {
+            // 연주 중단 - 악기 정보 제거
             setPeerInstruments(prev => {
               const next = { ...prev }
-              delete next[payload.peerId]
-              return next
-            })
-            // 네트워크 상태 제거
-            setPeerNetworkStats(prev => {
-              const next = { ...prev }
-              delete next[payload.peerId]
+              delete next[oderId]
               return next
             })
           }
+          return
+        }
+
+        // 하위 호환용: 기존 peers 메시지
+        if (payload.type === 'peers') {
+          const peerList: string[] = Array.isArray(payload.peerIds) ? payload.peerIds : []
+          console.log('[WS] Received peers (legacy):', peerList)
+          setPeers(peerList)
+          setJoinFeedback(`룸 입장 완료 · 동시 연결 ${peerList.length + 1}명`)
+          peerList.forEach((peerId) => {
+            void createOfferForPeer(peerId)
+          })
+          return
+        }
+
+        // 하위 호환용: 기존 peer-joined 메시지
+        if (payload.type === 'peer-joined' && typeof payload.peerId === 'string') {
+          setPeers((prev) => (prev.includes(payload.peerId) ? prev : [...prev, payload.peerId]))
+          return
+        }
+
+        // 하위 호환용: 기존 peer-left 메시지
+        if (payload.type === 'peer-left' && typeof payload.peerId === 'string') {
+          setPeers((prev) => prev.filter((id) => id !== payload.peerId))
+          closePeerConnection(payload.peerId)
+          setPeerInstruments(prev => {
+            const next = { ...prev }
+            delete next[payload.peerId]
+            return next
+          })
+          setPeerNetworkStats(prev => {
+            const next = { ...prev }
+            delete next[payload.peerId]
+            return next
+          })
           return
         }
         if (payload.type === 'offer' && typeof payload.from === 'string' && payload.offer) {
@@ -578,18 +729,21 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           void handleRemoteCandidate(payload.from, payload.candidate)
           return
         }
-        // 채팅 메시지 수신
-        if (payload.type === 'chat' && typeof payload.from === 'string') {
-          setChatMessages(prev => [...prev, {
-            id: `${payload.from}-${payload.timestamp || Date.now()}`,
-            peerId: payload.from,
-            nickname: payload.nickname || `User ${payload.from.slice(0, 4)}`,
-            message: payload.message,
-            timestamp: payload.timestamp || Date.now()
-          }])
+        // 채팅 메시지 수신 (서버는 oderId로 보냄)
+        if (payload.type === 'chat') {
+          const senderId = payload.oderId || payload.from
+          if (typeof senderId === 'string') {
+            setChatMessages(prev => [...prev, {
+              id: `${senderId}-${payload.timestamp || Date.now()}`,
+              peerId: senderId,
+              nickname: payload.nickname || `User ${senderId.slice(0, 4)}`,
+              message: payload.message,
+              timestamp: payload.timestamp || Date.now()
+            }])
+          }
           return
         }
-        // 악기 정보 수신
+        // 하위 호환용: 악기 정보 수신 (레거시)
         if (payload.type === 'instrument' && typeof payload.from === 'string') {
           setPeerInstruments(prev => ({
             ...prev,
@@ -599,18 +753,6 @@ export function RoomProvider({ children }: { children: ReactNode }) {
               nickname: payload.nickname || `User ${payload.from.slice(0, 4)}`
             }
           }))
-          return
-        }
-        // 연주 중단 수신 (관람자로 전환)
-        if (payload.type === 'peer-stopped-performing' && typeof payload.from === 'string') {
-          // 해당 피어의 오디오 스트림 제거
-          closePeerConnection(payload.from)
-          // 악기 정보 제거
-          setPeerInstruments(prev => {
-            const next = { ...prev }
-            delete next[payload.from]
-            return next
-          })
           return
         }
       } catch {
