@@ -58,6 +58,8 @@ export function RoomDetail() {
     remoteAudioMap,
     startLocalMic,
     stopLocalMic,
+    localMuted,
+    toggleLocalMute,
     leaveRoom,
     actualStreamSettings,
     // 믹서
@@ -67,6 +69,8 @@ export function RoomDetail() {
     setMixMuted,
     masterVolume,
     setMasterVolume,
+    masterMuted,
+    toggleMasterMute,
     // 채팅
     chatMessages,
     sendChatMessage,
@@ -538,10 +542,11 @@ export function RoomDetail() {
                   <span className="performer-instrument">{INSTRUMENT_INFO[myInstrument]?.name || myInstrument}</span>
                 </div>
                 <button
-                  onClick={localStream ? stopLocalMic : startLocalMic}
-                  className={`mic-toggle ${localStream ? 'on' : 'off'}`}
+                  onClick={toggleLocalMute}
+                  className={`mic-toggle ${localMuted ? 'off' : 'on'}`}
+                  title={localMuted ? '마이크 켜기' : '마이크 끄기'}
                 >
-                  {localStream ? '🎤' : '🔇'}
+                  {localMuted ? '🔇' : '🎤'}
                 </button>
                 <audio ref={localPreviewRef} autoPlay muted playsInline />
               </div>
@@ -616,8 +621,17 @@ export function RoomDetail() {
 
           <div className="mixer-content">
             {/* 마스터 볼륨 */}
-            <div className="mixer-master">
-              <label>마스터 볼륨</label>
+            <div className={`mixer-master ${masterMuted ? 'muted' : ''}`}>
+              <div className="master-header">
+                <label>마스터 볼륨</label>
+                <button
+                  className={`master-mute-btn ${masterMuted ? 'active' : ''}`}
+                  onClick={toggleMasterMute}
+                  title={masterMuted ? '음소거 해제' : '음소거'}
+                >
+                  {masterMuted ? '🔇' : '🔊'}
+                </button>
+              </div>
               <input
                 type="range"
                 min="0"
@@ -625,8 +639,9 @@ export function RoomDetail() {
                 step="0.01"
                 value={masterVolume}
                 onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
+                disabled={masterMuted}
               />
-              <span className="volume-value">{Math.round(masterVolume * 100)}%</span>
+              <span className="volume-value">{masterMuted ? 'MUTE' : `${Math.round(masterVolume * 100)}%`}</span>
             </div>
 
             {/* 각 연주자별 믹서 */}

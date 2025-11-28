@@ -4170,6 +4170,44 @@ body {
   color: var(--accent);
 }
 
+.mixer-master.muted {
+  opacity: 0.6;
+}
+
+.mixer-master.muted .volume-value {
+  color: var(--text-muted);
+}
+
+.master-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.master-header label {
+  margin-bottom: 0;
+}
+
+.master-mute-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.master-mute-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.master-mute-btn.active {
+  background: rgba(220, 38, 38, 0.3);
+  color: #f87171;
+}
+
 .mixer-channels {
   display: flex;
   flex-direction: column;

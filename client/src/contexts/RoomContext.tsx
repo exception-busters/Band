@@ -63,6 +63,8 @@ type RoomContextType = {
   remoteAudioMap: Record<string, MediaStream>
   startLocalMic: () => Promise<void>
   stopLocalMic: () => void
+  localMuted: boolean
+  toggleLocalMute: () => void
   currentRoomId: string | null
   leaveRoom: () => void
 
@@ -76,6 +78,8 @@ type RoomContextType = {
   setMixMuted: (oderId: string, muted: boolean) => void
   masterVolume: number
   setMasterVolume: (volume: number) => void
+  masterMuted: boolean
+  toggleMasterMute: () => void
 
   // 채팅
   chatMessages: ChatMessage[]
@@ -109,10 +113,12 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   const [remoteAudioMap, setRemoteAudioMap] = useState<Record<string, MediaStream>>({})
   const [actualStreamSettings, setActualStreamSettings] = useState<ActualAudioSettings | null>(null)
+  const [localMuted, setLocalMuted] = useState(false)
 
   // 개인 믹서 상태
   const [mixSettingsMap, setMixSettingsMap] = useState<Record<string, MixSettings>>({})
   const [masterVolume, setMasterVolume] = useState(1)
+  const [masterMuted, setMasterMuted] = useState(false)
   const audioNodesRef = useRef<Map<string, { gain: GainNode; panner: StereoPannerNode; context: AudioContext }>>(new Map())
 
   // 채팅 상태
@@ -428,6 +434,33 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // 로컬 마이크 뮤트/언뮤트 (연주자 상태 유지)
+  const toggleLocalMute = () => {
+    if (!localStream) return
+    const audioTrack = localStream.getAudioTracks()[0]
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled
+      setLocalMuted(!audioTrack.enabled)
+      console.log('[AUDIO] Local mic muted:', !audioTrack.enabled)
+    }
+  }
+
+  // 마스터 볼륨 뮤트/언뮤트
+  const toggleMasterMute = () => {
+    const newMuted = !masterMuted
+    setMasterMuted(newMuted)
+    // 모든 오디오 노드에 적용
+    audioNodesRef.current.forEach((nodes, oderId) => {
+      const settings = mixSettingsMap[oderId]
+      if (newMuted) {
+        nodes.gain.gain.value = 0
+      } else {
+        nodes.gain.gain.value = settings?.muted ? 0 : (settings?.volume ?? 1) * masterVolume
+      }
+    })
+    console.log('[AUDIO] Master muted:', newMuted)
+  }
+
   const joinRoom = (roomId: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       setJoinFeedback('시그널링 서버 연결을 확인하세요.')
@@ -502,14 +535,16 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     audioNodesRef.current.forEach((nodes, oderId) => {
       const settings = mixSettingsMap[oderId]
-      if (settings && !settings.muted) {
+      if (masterMuted) {
+        nodes.gain.gain.value = 0
+      } else if (settings && !settings.muted) {
         nodes.gain.gain.value = settings.volume * masterVolume
       } else if (!settings) {
         // 설정이 없으면 마스터 볼륨만 적용
         nodes.gain.gain.value = masterVolume
       }
     })
-  }, [masterVolume, mixSettingsMap])
+  }, [masterVolume, masterMuted, mixSettingsMap])
 
   // 원격 오디오 스트림에 Web Audio API 노드 연결
   useEffect(() => {
@@ -525,13 +560,15 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
         // 초기 설정 적용
         const settings = mixSettingsMap[oderId]
-        if (settings) {
+        if (masterMuted) {
+          gain.gain.value = 0
+        } else if (settings) {
           gain.gain.value = settings.muted ? 0 : settings.volume * masterVolume
           panner.pan.value = settings.pan
         } else {
           gain.gain.value = masterVolume
-          panner.pan.value = 0
         }
+        panner.pan.value = settings?.pan ?? 0
 
         // 연결: source -> gain -> panner -> destination
         source.connect(gain)
@@ -553,7 +590,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         console.log('[AUDIO] Removed audio nodes for peer:', oderId.slice(0, 8))
       }
     })
-  }, [remoteAudioMap, masterVolume, mixSettingsMap])
+  }, [remoteAudioMap, masterVolume, masterMuted, mixSettingsMap])
 
   // 채팅 메시지 전송
   const sendChatMessage = (message: string) => {
@@ -971,6 +1008,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         remoteAudioMap,
         startLocalMic,
         stopLocalMic,
+        localMuted,
+        toggleLocalMute,
         currentRoomId,
         leaveRoom,
         actualStreamSettings,
@@ -981,6 +1020,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         setMixMuted,
         masterVolume,
         setMasterVolume,
+        masterMuted,
+        toggleMasterMute,
         // 채팅
         chatMessages,
         sendChatMessage,
