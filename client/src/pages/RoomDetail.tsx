@@ -639,7 +639,6 @@ export function RoomDetail() {
                 step="0.01"
                 value={masterVolume}
                 onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
-                disabled={masterMuted}
               />
               <span className="volume-value">{masterMuted ? 'MUTE' : `${Math.round(masterVolume * 100)}%`}</span>
             </div>
