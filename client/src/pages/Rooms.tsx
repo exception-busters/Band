@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -17,6 +17,10 @@ interface DbRoom {
   created_at: string
 }
 
+interface MyRoom extends DbRoom {
+  // DbRoom과 동일하지만 명시적으로 구분
+}
+
 interface Room {
   id: string
   title: string
@@ -31,8 +35,66 @@ export function Rooms() {
   const [rooms, setRooms] = useState<Room[]>([])
   const [loading, setLoading] = useState(true)
   const [roomFilter, setRoomFilter] = useState<string>('all')
+  const [showMyRooms, setShowMyRooms] = useState(false)
+  const [myRooms, setMyRooms] = useState<MyRoom[]>([])
+  const [myRoomsLoading, setMyRoomsLoading] = useState(false)
   const { user } = useAuth()
   const navigate = useNavigate()
+
+  // 내가 만든 방 목록 불러오기
+  const fetchMyRooms = useCallback(async () => {
+    if (!supabase || !user) return
+
+    setMyRoomsLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('rooms')
+        .select('*')
+        .eq('host_id', user.id)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setMyRooms(data as MyRoom[])
+    } catch (err) {
+      console.error('Failed to fetch my rooms:', err)
+    } finally {
+      setMyRoomsLoading(false)
+    }
+  }, [user])
+
+  // 내 방 삭제
+  const handleDeleteMyRoom = async (roomId: string) => {
+    if (!supabase || !user) return
+
+    const confirmed = window.confirm('정말로 이 합주실을 삭제하시겠습니까?')
+    if (!confirmed) return
+
+    try {
+      const { error } = await supabase
+        .from('rooms')
+        .delete()
+        .eq('id', roomId)
+        .eq('host_id', user.id)
+
+      if (error) throw error
+
+      // 목록에서 제거
+      setMyRooms(prev => prev.filter(r => r.id !== roomId))
+    } catch (err) {
+      console.error('Failed to delete room:', err)
+      alert('삭제에 실패했습니다.')
+    }
+  }
+
+  // 내 방 모달 열기
+  const handleOpenMyRooms = () => {
+    if (!user) {
+      navigate('/auth', { state: { from: '/rooms' } })
+      return
+    }
+    setShowMyRooms(true)
+    fetchMyRooms()
+  }
 
   // 데이터베이스에서 방 목록 불러오기
   useEffect(() => {
@@ -112,14 +174,69 @@ export function Rooms() {
 
   return (
     <div className="rooms-page">
+      {/* 내가 만든 방 모달 */}
+      {showMyRooms && (
+        <div className="my-rooms-modal">
+          <div className="modal-backdrop" onClick={() => setShowMyRooms(false)} />
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>내가 만든 합주실</h2>
+              <button onClick={() => setShowMyRooms(false)} className="close-btn">×</button>
+            </div>
+            <div className="modal-body">
+              {myRoomsLoading ? (
+                <div className="my-rooms-loading">불러오는 중...</div>
+              ) : myRooms.length === 0 ? (
+                <div className="my-rooms-empty">
+                  <p>아직 만든 합주실이 없습니다.</p>
+                  <button onClick={() => { setShowMyRooms(false); handleCreateRoom(); }} className="create-room-btn-small">
+                    + 새 합주실 만들기
+                  </button>
+                </div>
+              ) : (
+                <div className="my-rooms-list">
+                  {myRooms.map(room => (
+                    <div key={room.id} className="my-room-item">
+                      <div className="my-room-info">
+                        <h4>{room.title}</h4>
+                        <p>{room.genre || '기타'} · {room.current_participants}/{room.max_participants}명</p>
+                      </div>
+                      <div className="my-room-actions">
+                        <button
+                          onClick={() => { setShowMyRooms(false); navigate(`/rooms/${room.id}`); }}
+                          className="my-room-enter-btn"
+                        >
+                          입장
+                        </button>
+                        <button
+                          onClick={() => handleDeleteMyRoom(room.id)}
+                          className="my-room-delete-btn"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="rooms-header">
         <div>
           <h1>합주실 찾기</h1>
           <p>전 세계 음악가들과 실시간으로 연주하세요</p>
         </div>
-        <button onClick={handleCreateRoom} className="create-room-btn">
-          + 새 합주실 만들기
-        </button>
+        <div className="rooms-header-buttons">
+          <button onClick={handleOpenMyRooms} className="my-rooms-btn">
+            📋 내 합주실
+          </button>
+          <button onClick={handleCreateRoom} className="create-room-btn">
+            + 새 합주실 만들기
+          </button>
+        </div>
       </div>
 
       <div className="room-filters">

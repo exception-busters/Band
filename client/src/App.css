@@ -4569,3 +4569,180 @@ body {
     font-size: 0.75rem;
   }
 }
+
+/* ===== My Rooms Modal (Rooms Page) ===== */
+.rooms-header-buttons {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.my-rooms-btn {
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.my-rooms-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent);
+}
+
+.my-rooms-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.my-rooms-modal > .modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.my-rooms-modal .modal-content {
+  position: relative;
+  background: var(--bg-panel);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 480px;
+  max-height: 80vh;
+  overflow: hidden;
+}
+
+.my-rooms-loading,
+.my-rooms-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.my-rooms-empty p {
+  margin-bottom: 16px;
+}
+
+.create-room-btn-small {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.create-room-btn-small:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(141, 123, 255, 0.4);
+}
+
+.my-rooms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.my-room-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: all 0.2s;
+}
+
+.my-room-item:hover {
+  border-color: var(--accent);
+  background: rgba(141, 123, 255, 0.05);
+}
+
+.my-room-info h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.my-room-info p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.my-room-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.my-room-enter-btn {
+  padding: 8px 16px;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.my-room-enter-btn:hover {
+  background: var(--accent-strong);
+}
+
+.my-room-delete-btn {
+  padding: 8px 12px;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 8px;
+  color: var(--error);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.my-room-delete-btn:hover {
+  background: rgba(248, 113, 113, 0.2);
+  border-color: var(--error);
+}
+
+/* Mobile responsive for my rooms */
+@media (max-width: 768px) {
+  .rooms-header-buttons {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .my-rooms-btn,
+  .create-room-btn {
+    width: 100%;
+  }
+
+  .my-room-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .my-room-actions {
+    width: 100%;
+  }
+
+  .my-room-enter-btn,
+  .my-room-delete-btn {
+    flex: 1;
+  }
+}
