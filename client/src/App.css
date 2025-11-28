@@ -4208,6 +4208,50 @@ body {
   color: #f87171;
 }
 
+/* Level Meter Styles */
+.level-meter {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.level-meter .level-bar {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.level-meter .level-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4ade80, #4ade80);
+  border-radius: 4px;
+  transition: width 0.05s ease-out;
+}
+
+.level-meter .level-fill.mid {
+  background: linear-gradient(90deg, #4ade80, #facc15);
+}
+
+.level-meter .level-fill.high {
+  background: linear-gradient(90deg, #4ade80, #facc15, #f87171);
+}
+
+.master-level {
+  margin-top: 12px;
+}
+
+.master-level .level-bar {
+  height: 12px;
+}
+
+.channel-level {
+  margin: 8px 0;
+}
+
+.channel-level .level-bar {
+  height: 6px;
+}
+
 .mixer-channels {
   display: flex;
   flex-direction: column;

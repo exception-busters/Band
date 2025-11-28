@@ -71,6 +71,9 @@ export function RoomDetail() {
     setMasterVolume,
     masterMuted,
     toggleMasterMute,
+    // 오디오 레벨
+    audioLevels,
+    masterLevel,
     // 채팅
     chatMessages,
     sendChatMessage,
@@ -641,6 +644,15 @@ export function RoomDetail() {
                 onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
               />
               <span className="volume-value">{masterMuted ? 'MUTE' : `${Math.round(masterVolume * 100)}%`}</span>
+              {/* 마스터 레벨 미터 */}
+              <div className="level-meter master-level">
+                <div className="level-bar">
+                  <div
+                    className={`level-fill ${masterLevel > 80 ? 'high' : masterLevel > 50 ? 'mid' : ''}`}
+                    style={{ width: `${masterLevel}%` }}
+                  />
+                </div>
+              </div>
             </div>
 
             {/* 각 연주자별 믹서 */}
@@ -693,6 +705,17 @@ export function RoomDetail() {
                         {netStats?.latency != null ? `${netStats.latency}ms` : '측정 중'}
                         {netStats?.jitter != null && <small> (지터: {netStats.jitter}ms)</small>}
                       </span>
+                    </div>
+                    {/* 레벨 미터 */}
+                    <div className="channel-level">
+                      <div className="level-meter">
+                        <div className="level-bar">
+                          <div
+                            className={`level-fill ${(audioLevels[oderId] || 0) > 80 ? 'high' : (audioLevels[oderId] || 0) > 50 ? 'mid' : ''}`}
+                            style={{ width: `${audioLevels[oderId] || 0}%` }}
+                          />
+                        </div>
+                      </div>
                     </div>
                     <div className="channel-controls">
                       <div className="control-row">

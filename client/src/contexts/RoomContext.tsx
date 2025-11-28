@@ -80,6 +80,9 @@ type RoomContextType = {
   setMasterVolume: (volume: number) => void
   masterMuted: boolean
   toggleMasterMute: () => void
+  // 오디오 레벨
+  audioLevels: Record<string, number>  // 각 피어별 오디오 레벨 (0-100)
+  masterLevel: number                   // 마스터 오디오 레벨 (0-100)
 
   // 채팅
   chatMessages: ChatMessage[]
@@ -119,7 +122,17 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const [mixSettingsMap, setMixSettingsMap] = useState<Record<string, MixSettings>>({})
   const [masterVolume, setMasterVolume] = useState(1)
   const [masterMuted, setMasterMuted] = useState(false)
-  const audioNodesRef = useRef<Map<string, { gain: GainNode; panner: StereoPannerNode; context: AudioContext }>>(new Map())
+  const audioNodesRef = useRef<Map<string, {
+    gain: GainNode
+    panner: StereoPannerNode
+    analyser: AnalyserNode
+    context: AudioContext
+  }>>(new Map())
+
+  // 오디오 레벨 상태
+  const [audioLevels, setAudioLevels] = useState<Record<string, number>>({})
+  const [masterLevel, setMasterLevel] = useState(0)
+  const levelAnimationRef = useRef<number | null>(null)
 
   // 채팅 상태
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -555,8 +568,13 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       try {
         const context = new AudioContext()
         const source = context.createMediaStreamSource(stream)
+        const analyser = context.createAnalyser()
         const gain = context.createGain()
         const panner = context.createStereoPanner()
+
+        // Analyser 설정
+        analyser.fftSize = 256
+        analyser.smoothingTimeConstant = 0.8
 
         // 초기 설정 적용
         const settings = mixSettingsMap[oderId]
@@ -570,12 +588,13 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         }
         panner.pan.value = settings?.pan ?? 0
 
-        // 연결: source -> gain -> panner -> destination
-        source.connect(gain)
+        // 연결: source -> analyser -> gain -> panner -> destination
+        source.connect(analyser)
+        analyser.connect(gain)
         gain.connect(panner)
         panner.connect(context.destination)
 
-        audioNodesRef.current.set(oderId, { gain, panner, context })
+        audioNodesRef.current.set(oderId, { gain, panner, analyser, context })
         console.log('[AUDIO] Created audio nodes for peer:', oderId.slice(0, 8))
       } catch (err) {
         console.error('[AUDIO] Failed to create audio nodes:', err)
@@ -591,6 +610,55 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       }
     })
   }, [remoteAudioMap, masterVolume, masterMuted, mixSettingsMap])
+
+  // 오디오 레벨 모니터링
+  useEffect(() => {
+    const getAudioLevel = (analyser: AnalyserNode): number => {
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+      analyser.getByteFrequencyData(dataArray)
+      // RMS 계산
+      let sum = 0
+      for (let i = 0; i < dataArray.length; i++) {
+        sum += dataArray[i] * dataArray[i]
+      }
+      const rms = Math.sqrt(sum / dataArray.length)
+      // 0-100 범위로 변환 (0-255 -> 0-100)
+      return Math.min(100, Math.round((rms / 255) * 100 * 2))
+    }
+
+    const updateLevels = () => {
+      const newLevels: Record<string, number> = {}
+      let maxLevel = 0
+
+      audioNodesRef.current.forEach((nodes, oderId) => {
+        const level = getAudioLevel(nodes.analyser)
+        newLevels[oderId] = level
+        if (level > maxLevel) maxLevel = level
+      })
+
+      // 피어 레벨이 있으면 업데이트
+      if (Object.keys(newLevels).length > 0) {
+        setAudioLevels(newLevels)
+        setMasterLevel(maxLevel)
+      } else {
+        setAudioLevels({})
+        setMasterLevel(0)
+      }
+
+      levelAnimationRef.current = requestAnimationFrame(updateLevels)
+    }
+
+    // 오디오 노드가 있으면 모니터링 시작
+    if (audioNodesRef.current.size > 0) {
+      levelAnimationRef.current = requestAnimationFrame(updateLevels)
+    }
+
+    return () => {
+      if (levelAnimationRef.current) {
+        cancelAnimationFrame(levelAnimationRef.current)
+      }
+    }
+  }, [remoteAudioMap])
 
   // 채팅 메시지 전송
   const sendChatMessage = (message: string) => {
@@ -1022,6 +1090,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         setMasterVolume,
         masterMuted,
         toggleMasterMute,
+        // 오디오 레벨
+        audioLevels,
+        masterLevel,
         // 채팅
         chatMessages,
         sendChatMessage,
