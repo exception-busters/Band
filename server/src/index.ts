@@ -76,6 +76,30 @@ wss.on('connection', (ws) => {
 				broadcastToRoom(client.roomId, id, msg);
 				return;
 			}
+
+			// 방 나가기 (명시적)
+			if (msg.type === 'leave' && client.roomId) {
+				const roomId = client.roomId;
+				const set = rooms.get(roomId);
+				if (set) {
+					set.delete(id);
+					console.log(`[LEAVE] Client ${id.slice(0, 8)} left room. Room size: ${set.size}`);
+					for (const peerId of set) {
+						const peer = clients.get(peerId);
+						if (peer) send(peer.ws, { type: 'peer-left', peerId: id });
+					}
+					if (set.size === 0) rooms.delete(roomId);
+				}
+				client.roomId = undefined;
+				return;
+			}
+
+			// 연주 중단 (관람자로 전환)
+			if (msg.type === 'stop-performing' && client.roomId) {
+				console.log(`[STOP-PERFORMING] ${id.slice(0, 8)} stopped performing`);
+				broadcastToRoom(client.roomId, id, { type: 'peer-stopped-performing' });
+				return;
+			}
 		} catch (err) {
 			console.error('[ERROR] Failed to parse message:', err);
 		}

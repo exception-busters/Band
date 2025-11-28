@@ -350,7 +350,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const stopLocalMic = () => {
+  const stopLocalMic = (notifyPeers = true) => {
     if (!localStream) return
     localStream.getTracks().forEach((track) => track.stop())
     peerConnections.current.forEach((pc) => {
@@ -365,6 +365,10 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     if (peerConnections.current.size === 0) {
       setRtcStatus('idle')
     }
+    // 다른 피어들에게 연주 중단 알림
+    if (notifyPeers) {
+      sendSignalMessage({ type: 'stop-performing' })
+    }
   }
 
   const joinRoom = (roomId: string) => {
@@ -378,8 +382,10 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   }
 
   const leaveRoom = () => {
+    // 서버에 나가기 알림
+    sendSignalMessage({ type: 'leave' })
     teardownPeerConnections()
-    stopLocalMic()
+    stopLocalMic(false) // 이미 leave로 알렸으므로 중복 알림 방지
     setPeers([])
     setCurrentRoomId(null)
     setJoinFeedback('')
@@ -593,6 +599,18 @@ export function RoomProvider({ children }: { children: ReactNode }) {
               nickname: payload.nickname || `User ${payload.from.slice(0, 4)}`
             }
           }))
+          return
+        }
+        // 연주 중단 수신 (관람자로 전환)
+        if (payload.type === 'peer-stopped-performing' && typeof payload.from === 'string') {
+          // 해당 피어의 오디오 스트림 제거
+          closePeerConnection(payload.from)
+          // 악기 정보 제거
+          setPeerInstruments(prev => {
+            const next = { ...prev }
+            delete next[payload.from]
+            return next
+          })
           return
         }
       } catch {
