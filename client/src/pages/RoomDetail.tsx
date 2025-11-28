@@ -573,21 +573,7 @@ export function RoomDetail() {
                     </span>
                     <span className="quality-indicator">{qualityInfo.icon}</span>
                   </div>
-                  {/* 오디오 스트림이 있을 때만 audio 요소 렌더링 */}
-                  {hasAudioStream && (
-                    <audio
-                      autoPlay
-                      playsInline
-                      ref={(node) => {
-                        if (node && remoteAudioMap[oderId]) {
-                          node.srcObject = remoteAudioMap[oderId]
-                          node.play().catch(err => {
-                            console.log('Audio play failed:', err)
-                          })
-                        }
-                      }}
-                    />
-                  )}
+                  {/* 오디오는 Web Audio API (RoomContext)에서 처리 */}
                 </div>
               )
             })}

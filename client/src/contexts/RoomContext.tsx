@@ -504,9 +504,56 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       const settings = mixSettingsMap[oderId]
       if (settings && !settings.muted) {
         nodes.gain.gain.value = settings.volume * masterVolume
+      } else if (!settings) {
+        // 설정이 없으면 마스터 볼륨만 적용
+        nodes.gain.gain.value = masterVolume
       }
     })
   }, [masterVolume, mixSettingsMap])
+
+  // 원격 오디오 스트림에 Web Audio API 노드 연결
+  useEffect(() => {
+    Object.entries(remoteAudioMap).forEach(([oderId, stream]) => {
+      // 이미 노드가 있으면 스킵
+      if (audioNodesRef.current.has(oderId)) return
+
+      try {
+        const context = new AudioContext()
+        const source = context.createMediaStreamSource(stream)
+        const gain = context.createGain()
+        const panner = context.createStereoPanner()
+
+        // 초기 설정 적용
+        const settings = mixSettingsMap[oderId]
+        if (settings) {
+          gain.gain.value = settings.muted ? 0 : settings.volume * masterVolume
+          panner.pan.value = settings.pan
+        } else {
+          gain.gain.value = masterVolume
+          panner.pan.value = 0
+        }
+
+        // 연결: source -> gain -> panner -> destination
+        source.connect(gain)
+        gain.connect(panner)
+        panner.connect(context.destination)
+
+        audioNodesRef.current.set(oderId, { gain, panner, context })
+        console.log('[AUDIO] Created audio nodes for peer:', oderId.slice(0, 8))
+      } catch (err) {
+        console.error('[AUDIO] Failed to create audio nodes:', err)
+      }
+    })
+
+    // 제거된 스트림의 노드 정리
+    audioNodesRef.current.forEach((nodes, oderId) => {
+      if (!remoteAudioMap[oderId]) {
+        nodes.context.close()
+        audioNodesRef.current.delete(oderId)
+        console.log('[AUDIO] Removed audio nodes for peer:', oderId.slice(0, 8))
+      }
+    })
+  }, [remoteAudioMap, masterVolume, mixSettingsMap])
 
   // 채팅 메시지 전송
   const sendChatMessage = (message: string) => {
