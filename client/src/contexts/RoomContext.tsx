@@ -398,6 +398,21 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     if (peerConnections.current.size === 0) {
       setRtcStatus('idle')
     }
+
+    // 내 악기 정보 초기화
+    setMyInstrumentState(null)
+    myInstrumentRef.current = null
+
+    // 내 악기 정보를 peerInstruments에서 제거
+    const myId = clientIdRef.current
+    if (myId) {
+      setPeerInstruments(prev => {
+        const next = { ...prev }
+        delete next[myId]
+        return next
+      })
+    }
+
     // 다른 피어들에게 연주 중단 알림
     if (notifyPeers) {
       sendSignalMessage({ type: 'stop-performing' })
