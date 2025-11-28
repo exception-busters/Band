@@ -352,11 +352,24 @@ export function Rooms() {
       if (next.has(roomId)) {
         next.delete(roomId)
       } else {
+        // 다른 팝업은 닫고 현재 것만 열기
+        next.clear()
         next.add(roomId)
       }
       return next
     })
   }
+
+  // 팝업 바깥 클릭 시 닫기
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (expandedTags.size > 0) {
+        setExpandedTags(new Set())
+      }
+    }
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [expandedTags.size])
 
   return (
     <div className="rooms-page">
@@ -402,7 +415,7 @@ export function Rooms() {
                         </div>
                         {room.tags && room.tags.length > 0 && (
                           <div className="my-room-tags">
-                            {(expandedTags.has(room.id) ? room.tags : room.tags.slice(0, 3)).map(tag => (
+                            {room.tags.slice(0, 3).map(tag => (
                               <span key={tag} className="my-room-tag">{tag}</span>
                             ))}
                             {room.tags.length > 3 && (
@@ -410,7 +423,14 @@ export function Rooms() {
                                 className="my-room-tag more clickable"
                                 onClick={(e) => toggleTagsExpanded(e, room.id)}
                               >
-                                {expandedTags.has(room.id) ? '접기' : `+${room.tags.length - 3}`}
+                                +{room.tags.length - 3}
+                                {expandedTags.has(room.id) && (
+                                  <div className="tags-popup">
+                                    {room.tags.slice(3).map(tag => (
+                                      <span key={tag} className="popup-tag">{tag}</span>
+                                    ))}
+                                  </div>
+                                )}
                               </span>
                             )}
                           </div>
@@ -726,7 +746,7 @@ export function Rooms() {
               <div className="room-card-tags">
                 {room.tags.length > 0 ? (
                   <>
-                    {(expandedTags.has(room.id) ? room.tags : room.tags.slice(0, 3)).map(tag => (
+                    {room.tags.slice(0, 3).map(tag => (
                       <span key={tag} className="room-card-tag">{tag}</span>
                     ))}
                     {room.tags.length > 3 && (
@@ -734,7 +754,14 @@ export function Rooms() {
                         className="room-card-tag more clickable"
                         onClick={(e) => toggleTagsExpanded(e, room.id)}
                       >
-                        {expandedTags.has(room.id) ? '접기' : `+${room.tags.length - 3}`}
+                        +{room.tags.length - 3}
+                        {expandedTags.has(room.id) && (
+                          <div className="tags-popup">
+                            {room.tags.slice(3).map(tag => (
+                              <span key={tag} className="popup-tag">{tag}</span>
+                            ))}
+                          </div>
+                        )}
                       </span>
                     )}
                   </>

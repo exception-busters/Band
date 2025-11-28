@@ -802,11 +802,49 @@ body {
 .room-card-tag.more.clickable {
   cursor: pointer;
   transition: all 0.2s ease;
+  position: relative;
 }
 
 .room-card-tag.more.clickable:hover {
   background: rgba(141, 123, 255, 0.25);
-  transform: scale(1.05);
+}
+
+/* Tags Popup */
+.tags-popup {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 150px;
+  max-width: 250px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+}
+
+.tags-popup::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--border);
+}
+
+.popup-tag {
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .room-card-tag.empty {
@@ -4868,11 +4906,11 @@ body {
 .my-room-tag.more.clickable {
   cursor: pointer;
   transition: all 0.2s ease;
+  position: relative;
 }
 
 .my-room-tag.more.clickable:hover {
   background: rgba(141, 123, 255, 0.25);
-  transform: scale(1.05);
 }
 
 .my-room-instruments {
