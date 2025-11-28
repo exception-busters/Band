@@ -18,13 +18,14 @@ export function Navigation() {
   }
 
   return (
-    <nav className="top-nav">
-      {/* 오디오 설정 모달 */}
+    <>
+      {/* 오디오 설정 모달 - nav 바깥에 렌더링 */}
       {showAudioSettings && (
         <AudioSettings isModal onClose={() => setShowAudioSettings(false)} />
       )}
 
-      <div className="brand">
+      <nav className="top-nav">
+        <div className="brand">
         <Link to="/">
           <span>BandSpace</span>
           <small>Web Studio</small>
@@ -57,7 +58,8 @@ export function Navigation() {
             로그인
           </Link>
         )}
-      </div>
-    </nav>
+        </div>
+      </nav>
+    </>
   )
 }
