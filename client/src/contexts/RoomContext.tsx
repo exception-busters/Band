@@ -250,6 +250,12 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     try {
       const pc = ensurePeerConnection(peerId)
 
+      // 이미 연결이 진행 중이거나 완료된 경우 중복 offer 무시
+      if (pc.signalingState === 'stable' && pc.iceConnectionState !== 'new' && pc.iceConnectionState !== 'closed') {
+        console.log('[RTC] Ignoring duplicate offer - connection already in progress, iceState:', pc.iceConnectionState)
+        return
+      }
+
       // Glare 처리: 양쪽에서 동시에 offer를 보낸 경우
       if (pc.signalingState === 'have-local-offer') {
         // clientId가 더 큰 쪽이 자신의 offer를 유지 (polite peer 패턴)
@@ -267,7 +273,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       attachLocalTracks(pc)
       const answer = await pc.createAnswer()
       await pc.setLocalDescription(answer)
-      console.log('[RTC] Answer created and sent to:', peerId.slice(0, 8))
+      console.log('[RTC] Answer created and sent to:', peerId.slice(0, 8), 'iceGatheringState:', pc.iceGatheringState)
       sendSignalMessage({ type: 'answer', to: peerId, answer })
       // 이미 connected 상태면 connecting으로 바꾸지 않음
       if (pc.connectionState !== 'connected') {

@@ -102,6 +102,7 @@ export function RoomDetail() {
   const [editingNickname, setEditingNickname] = useState(false)
   const localPreviewRef = useRef<HTMLAudioElement | null>(null)
   const chatContainerRef = useRef<HTMLDivElement | null>(null)
+  const hasJoinedRef = useRef(false)
 
   // 현재 선택된 입력 장치 이름
   const currentInputDevice = inputDevices.find(d => d.deviceId === audioSettings.inputDeviceId)?.label || '기본 장치'
@@ -156,7 +157,8 @@ export function RoomDetail() {
 
   // 방 입장 시 자동으로 joinRoom 호출 + DB 참여자 수 증가
   useEffect(() => {
-    if (room && roomId && signalStatus === 'connected') {
+    if (room && roomId && signalStatus === 'connected' && !hasJoinedRef.current) {
+      hasJoinedRef.current = true
       joinRoom(roomId)
 
       // DB 참여자 수 증가
