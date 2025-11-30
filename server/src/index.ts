@@ -23,9 +23,18 @@ interface Participant {
 	isHost: boolean;
 }
 
+// 연주 참여 요청 정보
+interface PerformRequest {
+	oderId: string;
+	nickname: string;
+	instrument: string;
+	timestamp: number;
+}
+
 const wss = new WebSocketServer({ port: PORT });
 const rooms = new Map<string, Set<string>>(); // roomId -> clientIds
 const clients = new Map<string, Client>(); // clientId -> client
+const performRequests = new Map<string, PerformRequest[]>(); // roomId -> pending requests
 
 function send(ws: import('ws').WebSocket, data: any) {
 	if (ws.readyState === ws.OPEN) {
@@ -73,6 +82,17 @@ function broadcastToRoomAll(roomId: string, data: any) {
 		const peer = clients.get(oderId);
 		if (peer) send(peer.ws, data);
 	}
+}
+
+// 방의 호스트 찾기
+function findRoomHost(roomId: string): Client | null {
+	const room = rooms.get(roomId);
+	if (!room) return null;
+	for (const oderId of room) {
+		const client = clients.get(oderId);
+		if (client?.isHost) return client;
+	}
+	return null;
 }
 
 wss.on('connection', (ws) => {
@@ -191,6 +211,142 @@ wss.on('connection', (ws) => {
 				return;
 			}
 
+			// 연주 참여 요청 (관람자 -> 방장)
+			if (msg.type === 'request-perform' && client.roomId && msg.instrument) {
+				const roomId = client.roomId;
+				const host = findRoomHost(roomId);
+
+				if (!host) {
+					console.log(`[REQUEST-PERFORM] No host found for room ${roomId.slice(0, 8)}`);
+					send(ws, { type: 'request-perform-error', message: '방장을 찾을 수 없습니다.' });
+					return;
+				}
+
+				// 요청 저장
+				if (!performRequests.has(roomId)) {
+					performRequests.set(roomId, []);
+				}
+				const requests = performRequests.get(roomId)!;
+
+				// 이미 요청한 경우 중복 방지
+				const existing = requests.find(r => r.oderId === id);
+				if (existing) {
+					console.log(`[REQUEST-PERFORM] Duplicate request from ${id.slice(0, 8)}`);
+					return;
+				}
+
+				const request: PerformRequest = {
+					oderId: id,
+					nickname: client.nickname,
+					instrument: msg.instrument,
+					timestamp: Date.now()
+				};
+				requests.push(request);
+
+				console.log(`[REQUEST-PERFORM] ${id.slice(0, 8)} (${client.nickname}) requested to perform: ${msg.instrument}`);
+
+				// 방장에게 요청 알림
+				send(host.ws, {
+					type: 'perform-request-received',
+					request
+				});
+
+				// 요청자에게 확인
+				send(ws, {
+					type: 'perform-request-sent',
+					instrument: msg.instrument
+				});
+				return;
+			}
+
+			// 연주 참여 승인 (방장 -> 관람자)
+			if (msg.type === 'approve-perform' && client.roomId && client.isHost && msg.targetId) {
+				const roomId = client.roomId;
+				const requests = performRequests.get(roomId);
+				const target = clients.get(msg.targetId);
+
+				if (!requests || !target) {
+					console.log(`[APPROVE-PERFORM] Request or target not found`);
+					return;
+				}
+
+				// 요청 목록에서 제거
+				const requestIndex = requests.findIndex(r => r.oderId === msg.targetId);
+				if (requestIndex === -1) {
+					console.log(`[APPROVE-PERFORM] Request not found for ${msg.targetId.slice(0, 8)}`);
+					return;
+				}
+
+				const request = requests[requestIndex];
+				requests.splice(requestIndex, 1);
+
+				console.log(`[APPROVE-PERFORM] Host approved ${msg.targetId.slice(0, 8)} (${request.nickname}) for ${request.instrument}`);
+
+				// 승인된 사용자에게 알림
+				send(target.ws, {
+					type: 'perform-request-approved',
+					instrument: request.instrument
+				});
+				return;
+			}
+
+			// 연주 참여 거절 (방장 -> 관람자)
+			if (msg.type === 'reject-perform' && client.roomId && client.isHost && msg.targetId) {
+				const roomId = client.roomId;
+				const requests = performRequests.get(roomId);
+				const target = clients.get(msg.targetId);
+
+				if (!requests) {
+					console.log(`[REJECT-PERFORM] No requests for room`);
+					return;
+				}
+
+				// 요청 목록에서 제거
+				const requestIndex = requests.findIndex(r => r.oderId === msg.targetId);
+				if (requestIndex === -1) {
+					console.log(`[REJECT-PERFORM] Request not found for ${msg.targetId?.slice(0, 8)}`);
+					return;
+				}
+
+				const request = requests[requestIndex];
+				requests.splice(requestIndex, 1);
+
+				console.log(`[REJECT-PERFORM] Host rejected ${msg.targetId.slice(0, 8)} (${request.nickname})`);
+
+				// 거절된 사용자에게 알림 (연결되어 있는 경우만)
+				if (target) {
+					send(target.ws, {
+						type: 'perform-request-rejected',
+						reason: msg.reason || '방장이 요청을 거절했습니다.'
+					});
+				}
+				return;
+			}
+
+			// 연주 참여 요청 취소 (관람자)
+			if (msg.type === 'cancel-perform-request' && client.roomId) {
+				const roomId = client.roomId;
+				const requests = performRequests.get(roomId);
+				const host = findRoomHost(roomId);
+
+				if (requests) {
+					const requestIndex = requests.findIndex(r => r.oderId === id);
+					if (requestIndex !== -1) {
+						requests.splice(requestIndex, 1);
+						console.log(`[CANCEL-REQUEST] ${id.slice(0, 8)} cancelled their perform request`);
+
+						// 방장에게 취소 알림
+						if (host) {
+							send(host.ws, {
+								type: 'perform-request-cancelled',
+								oderId: id
+							});
+						}
+					}
+				}
+				return;
+			}
+
 			// 방 나가기 (명시적)
 			if (msg.type === 'leave' && client.roomId) {
 				const roomId = client.roomId;
@@ -199,13 +355,30 @@ wss.on('connection', (ws) => {
 					set.delete(id);
 					console.log(`[LEAVE] Client ${id.slice(0, 8)} left room. Room size: ${set.size}`);
 
+					// 해당 사용자의 연주 요청 제거
+					const requests = performRequests.get(roomId);
+					if (requests) {
+						const idx = requests.findIndex(r => r.oderId === id);
+						if (idx !== -1) {
+							requests.splice(idx, 1);
+							// 방장에게 알림
+							const host = findRoomHost(roomId);
+							if (host) {
+								send(host.ws, { type: 'perform-request-cancelled', oderId: id });
+							}
+						}
+					}
+
 					// 방의 모든 피어에게 알림
 					for (const oderId of set) {
 						const peer = clients.get(oderId);
 						if (peer) send(peer.ws, { type: 'participant-left', oderId: id });
 					}
 
-					if (set.size === 0) rooms.delete(roomId);
+					if (set.size === 0) {
+						rooms.delete(roomId);
+						performRequests.delete(roomId);
+					}
 				}
 				client.roomId = undefined;
 				client.isPerforming = false;
@@ -226,13 +399,30 @@ wss.on('connection', (ws) => {
 			set.delete(id);
 			console.log(`[LEAVE] Client ${id.slice(0, 8)} left room. Room size: ${set.size}`);
 
+			// 해당 사용자의 연주 요청 제거
+			const requests = performRequests.get(roomId);
+			if (requests) {
+				const idx = requests.findIndex(r => r.oderId === id);
+				if (idx !== -1) {
+					requests.splice(idx, 1);
+					// 방장에게 알림
+					const host = findRoomHost(roomId);
+					if (host) {
+						send(host.ws, { type: 'perform-request-cancelled', oderId: id });
+					}
+				}
+			}
+
 			// 방의 모든 피어에게 알림
 			for (const oderId of set) {
 				const peer = clients.get(oderId);
 				if (peer) send(peer.ws, { type: 'participant-left', oderId: id });
 			}
 
-			if (set.size === 0) rooms.delete(roomId);
+			if (set.size === 0) {
+				rooms.delete(roomId);
+				performRequests.delete(roomId);
+			}
 		}
 
 		clients.delete(id);

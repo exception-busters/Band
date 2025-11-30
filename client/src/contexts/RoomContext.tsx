@@ -41,6 +41,17 @@ export interface PeerNetworkStats {
   quality: 'excellent' | 'good' | 'fair' | 'poor' | 'unknown'
 }
 
+// 연주 참여 요청
+export interface PerformRequest {
+  oderId: string
+  nickname: string
+  instrument: string
+  timestamp: number
+}
+
+// 내 요청 상태
+export type MyRequestStatus = 'none' | 'pending' | 'approved' | 'rejected'
+
 // 네트워크 품질 판정 함수
 function getNetworkQuality(latency: number | null, packetLossRate: number): PeerNetworkStats['quality'] {
   if (latency === null) return 'unknown'
@@ -104,6 +115,17 @@ type RoomContextType = {
 
   // 네트워크 상태
   peerNetworkStats: Record<string, PeerNetworkStats>
+
+  // 연주 참여 요청 (방장용)
+  pendingRequests: PerformRequest[]
+  approveRequest: (oderId: string) => void
+  rejectRequest: (oderId: string, reason?: string) => void
+
+  // 연주 참여 요청 (요청자용)
+  myRequestStatus: MyRequestStatus
+  myRequestInstrument: string | null
+  requestPerform: (instrument: string) => void
+  cancelRequest: () => void
 }
 
 const RoomContext = createContext<RoomContextType | null>(null)
@@ -285,6 +307,13 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
   // 네트워크 상태
   const [peerNetworkStats, setPeerNetworkStats] = useState<Record<string, PeerNetworkStats>>({})
+
+  // 연주 참여 요청 상태 (방장용)
+  const [pendingRequests, setPendingRequests] = useState<PerformRequest[]>([])
+
+  // 내 요청 상태 (요청자용)
+  const [myRequestStatus, setMyRequestStatus] = useState<MyRequestStatus>('none')
+  const [myRequestInstrument, setMyRequestInstrument] = useState<string | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map())
@@ -705,6 +734,10 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     myInstrumentRef.current = null
     // 네트워크 상태 초기화
     setPeerNetworkStats({})
+    // 연주 요청 상태 초기화
+    setPendingRequests([])
+    setMyRequestStatus('none')
+    setMyRequestInstrument(null)
   }
 
   // 기본 믹서 설정
@@ -836,6 +869,51 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         [clientId]: { peerId: clientId, instrument, nickname, isHost: isHost || false }
       }))
     }
+  }
+
+  // 연주 참여 요청 (관람자가 방장에게 요청)
+  const requestPerform = (instrument: string) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({
+      type: 'request-perform',
+      instrument
+    }))
+    setMyRequestInstrument(instrument)
+    console.log('[REQUEST] Sent perform request for:', instrument)
+  }
+
+  // 요청 취소
+  const cancelRequest = () => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({ type: 'cancel-perform-request' }))
+    setMyRequestStatus('none')
+    setMyRequestInstrument(null)
+    console.log('[REQUEST] Cancelled perform request')
+  }
+
+  // 요청 승인 (방장)
+  const approveRequest = (targetId: string) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({
+      type: 'approve-perform',
+      targetId
+    }))
+    // 로컬에서 즉시 제거
+    setPendingRequests(prev => prev.filter(r => r.oderId !== targetId))
+    console.log('[REQUEST] Approved perform request for:', targetId.slice(0, 8))
+  }
+
+  // 요청 거절 (방장)
+  const rejectRequest = (targetId: string, reason?: string) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({
+      type: 'reject-perform',
+      targetId,
+      reason
+    }))
+    // 로컬에서 즉시 제거
+    setPendingRequests(prev => prev.filter(r => r.oderId !== targetId))
+    console.log('[REQUEST] Rejected perform request for:', targetId.slice(0, 8))
   }
 
   // nickname 변경 시 ref 업데이트
@@ -1084,6 +1162,51 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           }))
           return
         }
+
+        // === 연주 참여 요청 관련 메시지 ===
+
+        // 요청 전송 확인 (요청자)
+        if (payload.type === 'perform-request-sent') {
+          setMyRequestStatus('pending')
+          console.log('[REQUEST] Request sent, waiting for approval')
+          return
+        }
+
+        // 요청 에러 (요청자)
+        if (payload.type === 'request-perform-error') {
+          setMyRequestStatus('none')
+          setMyRequestInstrument(null)
+          console.log('[REQUEST] Error:', payload.message)
+          return
+        }
+
+        // 새 요청 수신 (방장)
+        if (payload.type === 'perform-request-received' && payload.request) {
+          console.log('[REQUEST] Received perform request:', payload.request)
+          setPendingRequests(prev => [...prev, payload.request])
+          return
+        }
+
+        // 요청 취소됨 (방장)
+        if (payload.type === 'perform-request-cancelled' && payload.oderId) {
+          console.log('[REQUEST] Request cancelled by:', payload.oderId.slice(0, 8))
+          setPendingRequests(prev => prev.filter(r => r.oderId !== payload.oderId))
+          return
+        }
+
+        // 요청 승인됨 (요청자)
+        if (payload.type === 'perform-request-approved') {
+          console.log('[REQUEST] Request approved! Instrument:', payload.instrument)
+          setMyRequestStatus('approved')
+          return
+        }
+
+        // 요청 거절됨 (요청자)
+        if (payload.type === 'perform-request-rejected') {
+          console.log('[REQUEST] Request rejected:', payload.reason)
+          setMyRequestStatus('rejected')
+          return
+        }
       } catch {
         // ignore malformed payloads
       }
@@ -1261,6 +1384,15 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         setMyInstrument,
         // 네트워크 상태
         peerNetworkStats,
+        // 연주 참여 요청 (방장용)
+        pendingRequests,
+        approveRequest,
+        rejectRequest,
+        // 연주 참여 요청 (요청자용)
+        myRequestStatus,
+        myRequestInstrument,
+        requestPerform,
+        cancelRequest,
       }}
     >
       {children}

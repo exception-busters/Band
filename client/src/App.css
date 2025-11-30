@@ -3816,6 +3816,180 @@ body {
   text-align: center;
 }
 
+/* 요청 상태 표시 */
+.request-status {
+  text-align: center;
+  padding: 16px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.request-status p {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.request-status small {
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 12px;
+}
+
+.request-status.pending {
+  border: 1px solid var(--warning);
+}
+
+.request-status.approved {
+  border: 1px solid var(--success);
+}
+
+.request-status.approved p {
+  color: var(--success);
+}
+
+.request-status.rejected {
+  border: 1px solid var(--error);
+}
+
+.request-status.rejected p {
+  color: var(--error);
+}
+
+.cancel-request-btn {
+  background: transparent;
+  border: 1px solid var(--text-muted);
+  color: var(--text-muted);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.cancel-request-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* 방장: 승인 요청 알림 */
+.pending-requests-alert {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.2), rgba(255, 122, 184, 0.2));
+  border: 1px solid var(--warning);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pending-requests-alert:hover {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.3), rgba(255, 122, 184, 0.3));
+  transform: translateY(-2px);
+}
+
+.pending-requests-alert .alert-badge {
+  background: var(--warning);
+  color: #000;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.pending-requests-alert span:last-child {
+  font-weight: 500;
+}
+
+/* 승인 요청 모달 */
+.pending-requests-modal .modal-content {
+  max-width: 450px;
+}
+
+.pending-requests-modal .no-requests {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 24px;
+}
+
+.requests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.request-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.request-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.request-icon {
+  font-size: 1.5rem;
+}
+
+.request-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.request-nickname {
+  font-weight: 600;
+}
+
+.request-instrument {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.request-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.approve-btn,
+.reject-btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.approve-btn {
+  background: var(--success);
+  color: #000;
+}
+
+.approve-btn:hover {
+  background: #22c55e;
+  transform: translateY(-1px);
+}
+
+.reject-btn {
+  background: rgba(248, 113, 113, 0.2);
+  color: var(--error);
+  border: 1px solid var(--error);
+}
+
+.reject-btn:hover {
+  background: rgba(248, 113, 113, 0.3);
+}
+
 /* Main Stage (Center) */
 .main-stage {
   background: var(--bg-app);
@@ -4560,7 +4734,8 @@ body {
 }
 
 /* Room Info Modal */
-.room-info-modal {
+.room-info-modal,
+.pending-requests-modal {
   position: fixed;
   inset: 0;
   z-index: 1000;
@@ -4570,13 +4745,15 @@ body {
 }
 
 .room-info-modal > .modal-backdrop,
-.instrument-select-modal > .modal-backdrop {
+.instrument-select-modal > .modal-backdrop,
+.pending-requests-modal > .modal-backdrop {
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.7);
 }
 
-.room-info-modal .modal-content {
+.room-info-modal .modal-content,
+.pending-requests-modal .modal-content {
   position: relative;
   background: var(--bg-panel);
   border-radius: 16px;

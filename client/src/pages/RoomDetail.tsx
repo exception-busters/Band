@@ -132,6 +132,14 @@ export function RoomDetail() {
     setMyInstrument,
     // 네트워크 상태
     peerNetworkStats,
+    // 연주 참여 요청
+    pendingRequests,
+    approveRequest,
+    rejectRequest,
+    myRequestStatus,
+    myRequestInstrument,
+    requestPerform,
+    cancelRequest,
   } = useRoom()
 
   const { settings: audioSettings, inputDevices } = useAudioSettings()
@@ -148,8 +156,8 @@ export function RoomDetail() {
   const [room, setRoom] = useState<Room | null>(null)
   const [loading, setLoading] = useState(true)
   const [isPerformer, setIsPerformer] = useState(false)
-  const [pendingRequest, setPendingRequest] = useState(false)
   const [showAudioSettings, setShowAudioSettings] = useState(false)
+  const [showPendingRequests, setShowPendingRequests] = useState(false)
   const [showRoomInfo, setShowRoomInfo] = useState(false)
   const [showInstrumentSelect, setShowInstrumentSelect] = useState(false)
   const [chatInput, setChatInput] = useState('')
@@ -335,25 +343,41 @@ export function RoomDetail() {
       return
     }
 
+    // 악기 선택 모달 열기 (자유참여든 승인필요든 일단 악기 선택)
+    setShowInstrumentSelect(true)
+  }
+
+  // 악기 선택 후 연주 시작 또는 요청
+  const handleSelectInstrument = async (instrumentId: string) => {
+    setShowInstrumentSelect(false)
+
     if (room?.free_join || isHost) {
-      // 악기 선택 모달 열기
-      setShowInstrumentSelect(true)
+      // 자유참여 또는 방장: 바로 연주 시작
+      setMyInstrument(instrumentId, isHost || false)
+      setIsPerformer(true)
+
+      try {
+        await startLocalMic()
+      } catch (error) {
+        console.error('Failed to start mic:', error)
+      }
     } else {
-      setPendingRequest(true)
-      alert('방장에게 연주 참여 요청을 보냈습니다. 승인을 기다려주세요.')
+      // 승인 필요: 방장에게 요청 전송
+      requestPerform(instrumentId)
     }
   }
 
-  // 악기 선택 후 연주 시작
-  const handleSelectInstrument = async (instrumentId: string) => {
-    setShowInstrumentSelect(false)
-    setMyInstrument(instrumentId, isHost || false)
-    setIsPerformer(true)
+  // 승인되면 연주 시작
+  const handleStartAfterApproval = async () => {
+    if (myRequestInstrument) {
+      setMyInstrument(myRequestInstrument, false)
+      setIsPerformer(true)
 
-    try {
-      await startLocalMic()
-    } catch (error) {
-      console.error('Failed to start mic:', error)
+      try {
+        await startLocalMic()
+      } catch (error) {
+        console.error('Failed to start mic:', error)
+      }
     }
   }
 
@@ -361,7 +385,10 @@ export function RoomDetail() {
   const handleBecomeViewer = () => {
     stopLocalMic()
     setIsPerformer(false)
-    setPendingRequest(false)
+    // 요청 중이었다면 취소
+    if (myRequestStatus === 'pending') {
+      cancelRequest()
+    }
   }
 
   // 퇴장
@@ -499,6 +526,55 @@ export function RoomDetail() {
                   <button onClick={handleDeleteRoom} className="delete-room-btn">
                     🗑️ 합주실 삭제
                   </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 승인 요청 관리 모달 (방장용) */}
+      {showPendingRequests && (
+        <div className="pending-requests-modal">
+          <div className="modal-backdrop" onClick={() => setShowPendingRequests(false)} />
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>🎫 연주 참여 요청</h2>
+              <button onClick={() => setShowPendingRequests(false)} className="close-btn">×</button>
+            </div>
+            <div className="modal-body">
+              {pendingRequests.length === 0 ? (
+                <p className="no-requests">대기 중인 요청이 없습니다</p>
+              ) : (
+                <div className="requests-list">
+                  {pendingRequests.map(request => {
+                    const instInfo = INSTRUMENT_INFO[request.instrument] || { icon: '🎵', name: request.instrument }
+                    return (
+                      <div key={request.oderId} className="request-item">
+                        <div className="request-info">
+                          <span className="request-icon">{instInfo.icon}</span>
+                          <div className="request-details">
+                            <span className="request-nickname">{request.nickname}</span>
+                            <span className="request-instrument">{instInfo.name} 연주 희망</span>
+                          </div>
+                        </div>
+                        <div className="request-actions">
+                          <button
+                            onClick={() => approveRequest(request.oderId)}
+                            className="approve-btn"
+                          >
+                            ✓ 승인
+                          </button>
+                          <button
+                            onClick={() => rejectRequest(request.oderId)}
+                            className="reject-btn"
+                          >
+                            ✗ 거절
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -661,19 +737,52 @@ export function RoomDetail() {
               <button onClick={handleBecomeViewer} className="toggle-btn viewer">
                 👀 관람자로 전환
               </button>
+            ) : myRequestStatus === 'pending' ? (
+              /* 승인 대기 중 */
+              <div className="request-status pending">
+                <p>⏳ 승인 대기 중...</p>
+                <small>{INSTRUMENT_INFO[myRequestInstrument || '']?.name || myRequestInstrument} 연주 요청</small>
+                <button onClick={cancelRequest} className="cancel-request-btn">
+                  요청 취소
+                </button>
+              </div>
+            ) : myRequestStatus === 'approved' ? (
+              /* 승인됨 - 연주 시작 가능 */
+              <div className="request-status approved">
+                <p>✅ 승인되었습니다!</p>
+                <button onClick={handleStartAfterApproval} className="toggle-btn performer">
+                  🎤 연주 시작하기
+                </button>
+              </div>
+            ) : myRequestStatus === 'rejected' ? (
+              /* 거절됨 */
+              <div className="request-status rejected">
+                <p>❌ 요청이 거절되었습니다</p>
+                <button onClick={() => { cancelRequest(); }} className="toggle-btn performer">
+                  🎤 다시 요청하기
+                </button>
+              </div>
             ) : (
+              /* 기본 상태 */
               <button
                 onClick={handleBecomePerformer}
                 className="toggle-btn performer"
-                disabled={pendingRequest}
               >
-                {pendingRequest ? '승인 대기 중...' : '🎤 연주 참여하기'}
+                🎤 연주 참여하기
               </button>
             )}
-            {!room.free_join && !isHost && !isPerformer && (
+            {!room.free_join && !isHost && !isPerformer && myRequestStatus === 'none' && (
               <p className="approval-notice">이 방은 방장 승인이 필요합니다</p>
             )}
           </div>
+
+          {/* 방장: 승인 요청 알림 */}
+          {isHost && pendingRequests.length > 0 && (
+            <div className="pending-requests-alert" onClick={() => setShowPendingRequests(true)}>
+              <span className="alert-badge">{pendingRequests.length}</span>
+              <span>연주 참여 요청</span>
+            </div>
+          )}
         </aside>
 
         {/* 가운데: 믹서 */}
