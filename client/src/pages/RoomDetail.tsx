@@ -157,6 +157,13 @@ export function RoomDetail() {
     myRequestInstrument,
     requestPerform,
     cancelRequest,
+    // 녹음
+    isRecording,
+    recordings,
+    recordingDuration,
+    startRecording,
+    stopRecording,
+    deleteRecording,
   } = useRoom()
 
   // 네트워크 품질 아이콘
@@ -175,6 +182,7 @@ export function RoomDetail() {
   const [showRoomInfo, setShowRoomInfo] = useState(false)
   const [showInstrumentSelect, setShowInstrumentSelect] = useState(false)
   const [showRoomSettings, setShowRoomSettings] = useState(false)
+  const [showRecordings, setShowRecordings] = useState(false)
   const [hostNickname, setHostNickname] = useState<string | null>(null)
   const [chatInput, setChatInput] = useState('')
   const localPreviewRef = useRef<HTMLAudioElement | null>(null)
@@ -601,6 +609,39 @@ export function RoomDetail() {
   // 총 악기 슬롯 수 계산
   const editTotalSlots = editInstrumentSlots.reduce((sum, s) => sum + s.count, 0)
 
+  // 녹음 시간 포맷
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  // 녹음 파일 다운로드
+  const downloadRecording = (recording: { url: string; timestamp: number; duration: number; mimeType: string }) => {
+    const date = new Date(recording.timestamp)
+
+    // MIME 타입에 따른 확장자 결정
+    let extension = 'webm'
+    if (recording.mimeType.includes('mp4')) {
+      extension = 'm4a'
+    } else if (recording.mimeType.includes('ogg')) {
+      extension = 'ogg'
+    } else if (recording.mimeType.includes('mpeg') || recording.mimeType.includes('mp3')) {
+      extension = 'mp3'
+    } else if (recording.mimeType.includes('wav')) {
+      extension = 'wav'
+    }
+
+    const filename = `recording_${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}${date.getDate().toString().padStart(2, '0')}_${date.getHours().toString().padStart(2, '0')}${date.getMinutes().toString().padStart(2, '0')}.${extension}`
+
+    const a = document.createElement('a')
+    a.href = recording.url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }
+
   // 채팅 전송
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault()
@@ -1012,6 +1053,67 @@ export function RoomDetail() {
         </div>
       )}
 
+      {/* 녹음 목록 모달 */}
+      {showRecordings && (
+        <div className="recordings-modal">
+          <div className="modal-backdrop" onClick={() => setShowRecordings(false)} />
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>🎙️ 녹음 목록</h2>
+              <button onClick={() => setShowRecordings(false)} className="close-btn">×</button>
+            </div>
+            <div className="modal-body">
+              {recordings.length === 0 ? (
+                <div className="no-recordings">
+                  <p>녹음된 파일이 없습니다</p>
+                  <small>녹음 버튼을 눌러 합주를 녹음해보세요</small>
+                </div>
+              ) : (
+                <div className="recordings-list">
+                  {recordings.map(recording => {
+                    const date = new Date(recording.timestamp)
+                    const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+                    // 파일 형식 표시
+                    const format = recording.mimeType.includes('webm') ? 'WebM'
+                      : recording.mimeType.includes('mp4') ? 'M4A'
+                      : recording.mimeType.includes('ogg') ? 'OGG'
+                      : 'Audio'
+                    return (
+                      <div key={recording.id} className="recording-item">
+                        <div className="recording-info">
+                          <span className="recording-time">🕐 {timeStr}</span>
+                          <span className="recording-duration">{formatDuration(recording.duration)}</span>
+                          <span className="recording-format">{format}</span>
+                        </div>
+                        <div className="recording-controls">
+                          <audio controls src={recording.url} className="recording-audio" />
+                        </div>
+                        <div className="recording-actions">
+                          <button
+                            onClick={() => downloadRecording(recording)}
+                            className="download-btn"
+                            title="다운로드"
+                          >
+                            ⬇️
+                          </button>
+                          <button
+                            onClick={() => deleteRecording(recording.id)}
+                            className="delete-btn"
+                            title="삭제"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 상단 헤더 */}
       <header className="live-header">
         <div className="live-header-left">
@@ -1334,6 +1436,33 @@ export function RoomDetail() {
                   <p>연주자가 없습니다</p>
                   <small>연주자가 참여하면 여기서 볼륨을 조절할 수 있습니다</small>
                 </div>
+              )}
+            </div>
+          </div>
+
+          {/* 녹음 컨트롤 */}
+          <div className="recording-section">
+            <div className="recording-control">
+              <button
+                onClick={isRecording ? stopRecording : startRecording}
+                className={`recording-btn ${isRecording ? 'recording' : ''}`}
+                title={isRecording ? '녹음 중지' : '녹음 시작'}
+              >
+                {isRecording ? '⏹️' : '⏺️'}
+                <span>{isRecording ? '녹음 중지' : '녹음'}</span>
+              </button>
+              {isRecording && (
+                <span className="recording-time">
+                  🔴 {formatDuration(recordingDuration)}
+                </span>
+              )}
+              {recordings.length > 0 && (
+                <button
+                  onClick={() => setShowRecordings(true)}
+                  className="recordings-list-btn"
+                >
+                  📁 녹음 목록 ({recordings.length})
+                </button>
               )}
             </div>
           </div>

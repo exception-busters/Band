@@ -52,6 +52,16 @@ export interface PerformRequest {
 // 내 요청 상태
 export type MyRequestStatus = 'none' | 'pending' | 'approved' | 'rejected'
 
+// 녹음 파일 정보
+export interface Recording {
+  id: string
+  blob: Blob
+  url: string
+  timestamp: number
+  duration: number
+  mimeType: string
+}
+
 // 네트워크 품질 판정 함수
 function getNetworkQuality(latency: number | null, packetLossRate: number): PeerNetworkStats['quality'] {
   if (latency === null) return 'unknown'
@@ -126,6 +136,14 @@ type RoomContextType = {
   myRequestInstrument: string | null
   requestPerform: (instrument: string) => void
   cancelRequest: () => void
+
+  // 녹음
+  isRecording: boolean
+  recordings: Recording[]
+  recordingDuration: number
+  startRecording: () => void
+  stopRecording: () => void
+  deleteRecording: (id: string) => void
 }
 
 const RoomContext = createContext<RoomContextType | null>(null)
@@ -173,6 +191,16 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       console.log('[AUDIO] Created new AudioContext')
     }
     return audioContextRef.current
+  }
+
+  // 녹음용 destination 노드 가져오기
+  const getRecordingDestination = (): MediaStreamAudioDestinationNode => {
+    if (!recordingDestinationRef.current) {
+      const context = getAudioContext()
+      recordingDestinationRef.current = context.createMediaStreamDestination()
+      console.log('[RECORDING] Created MediaStreamAudioDestinationNode for recording')
+    }
+    return recordingDestinationRef.current
   }
 
   // MediaStream을 Web Audio API에 연결
@@ -314,6 +342,17 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   // 내 요청 상태 (요청자용)
   const [myRequestStatus, setMyRequestStatus] = useState<MyRequestStatus>('none')
   const [myRequestInstrument, setMyRequestInstrument] = useState<string | null>(null)
+
+  // 녹음 상태
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordings, setRecordings] = useState<Recording[]>([])
+  const [recordingDuration, setRecordingDuration] = useState(0)
+  const recordingDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recordingChunksRef = useRef<Blob[]>([])
+  const recordingStartTimeRef = useRef<number>(0)
+  const recordingTimerRef = useRef<number | null>(null)
+  const recordingMimeTypeRef = useRef<string>('')
 
   const wsRef = useRef<WebSocket | null>(null)
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map())
@@ -738,6 +777,19 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     setPendingRequests([])
     setMyRequestStatus('none')
     setMyRequestInstrument(null)
+    // 녹음 중지 (진행 중인 경우)
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop()
+      mediaRecorderRef.current = null
+      setIsRecording(false)
+    }
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current)
+      recordingTimerRef.current = null
+    }
+    setRecordingDuration(0)
+    // 녹음 destination 해제
+    recordingDestinationRef.current = null
   }
 
   // 기본 믹서 설정
@@ -889,6 +941,190 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     setMyRequestStatus('none')
     setMyRequestInstrument(null)
     console.log('[REQUEST] Cancelled perform request')
+  }
+
+  // === 녹음 기능 ===
+
+  // 지원되는 MIME 타입 찾기
+  const getSupportedMimeType = (): string => {
+    const types = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg;codecs=opus',
+      'audio/mp4',
+      'audio/mpeg',
+      ''  // 빈 문자열은 브라우저 기본값 사용
+    ]
+    for (const type of types) {
+      if (type === '' || MediaRecorder.isTypeSupported(type)) {
+        console.log('[RECORDING] Using MIME type:', type || 'browser default')
+        return type
+      }
+    }
+    return ''
+  }
+
+  // 녹음 시작
+  const startRecording = async () => {
+    if (isRecording) return
+
+    // AudioContext가 suspended 상태면 resume
+    const context = audioContextRef.current
+    if (context && context.state === 'suspended') {
+      console.log('[RECORDING] Resuming suspended AudioContext')
+      await context.resume()
+    }
+
+    // 연결된 오디오 노드가 있는지 확인
+    const connectedNodes = audioNodesRef.current.size
+    console.log('[RECORDING] Connected audio nodes:', connectedNodes)
+
+    if (connectedNodes === 0) {
+      console.warn('[RECORDING] No audio sources connected')
+      alert('녹음할 오디오가 없습니다. 연주자의 오디오가 연결되어 있어야 합니다.')
+      return
+    }
+
+    // 녹음 destination 가져오기 (없으면 새로 생성)
+    const recordingDest = getRecordingDestination()
+
+    // 모든 기존 오디오 노드를 녹음 destination에 연결 (혹시 연결 안 되어 있으면)
+    audioNodesRef.current.forEach((nodes, peerId) => {
+      try {
+        // 기존 연결 해제 후 다시 연결 (중복 연결 방지)
+        try {
+          nodes.panner.disconnect(recordingDest)
+        } catch {
+          // 연결되어 있지 않았으면 무시
+        }
+        nodes.panner.connect(recordingDest)
+        console.log('[RECORDING] Connected panner to recording dest for:', peerId.slice(0, 8))
+      } catch (err) {
+        console.error('[RECORDING] Failed to connect panner:', peerId.slice(0, 8), err)
+      }
+    })
+
+    const stream = recordingDest.stream
+
+    // 오디오 트랙 확인
+    const audioTracks = stream.getAudioTracks()
+    console.log('[RECORDING] Audio tracks:', audioTracks.length, audioTracks.map(t => ({
+      enabled: t.enabled,
+      readyState: t.readyState,
+      muted: t.muted
+    })))
+
+    if (audioTracks.length === 0) {
+      console.warn('[RECORDING] No audio tracks available for recording')
+      alert('녹음할 오디오 트랙이 없습니다.')
+      return
+    }
+
+    try {
+      const mimeType = getSupportedMimeType()
+      recordingMimeTypeRef.current = mimeType
+
+      // MediaRecorder 옵션 설정
+      const options: MediaRecorderOptions = {}
+      if (mimeType) {
+        options.mimeType = mimeType
+      }
+
+      const recorder = new MediaRecorder(stream, options)
+      mediaRecorderRef.current = recorder
+      recordingChunksRef.current = []
+      recordingStartTimeRef.current = Date.now()
+
+      // 실제 사용되는 MIME 타입 확인
+      const actualMimeType = recorder.mimeType
+      console.log('[RECORDING] Actual recorder mimeType:', actualMimeType)
+      recordingMimeTypeRef.current = actualMimeType
+
+      recorder.ondataavailable = (event) => {
+        console.log('[RECORDING] Data available:', event.data.size, 'bytes, chunks:', recordingChunksRef.current.length)
+        if (event.data.size > 0) {
+          recordingChunksRef.current.push(event.data)
+        }
+      }
+
+      recorder.onstop = () => {
+        const actualType = recordingMimeTypeRef.current || 'audio/webm'
+        const chunks = recordingChunksRef.current
+
+        console.log('[RECORDING] Stopping. Total chunks:', chunks.length, 'Total size:', chunks.reduce((acc, c) => acc + c.size, 0))
+
+        if (chunks.length === 0) {
+          console.warn('[RECORDING] No data recorded')
+          alert('녹음된 데이터가 없습니다. 연주자의 소리가 들리는지 확인해주세요.')
+          return
+        }
+
+        const blob = new Blob(chunks, { type: actualType })
+        const url = URL.createObjectURL(blob)
+        const duration = Math.floor((Date.now() - recordingStartTimeRef.current) / 1000)
+
+        console.log('[RECORDING] Created blob:', blob.size, 'bytes, type:', blob.type)
+
+        const newRecording: Recording = {
+          id: `rec-${Date.now()}`,
+          blob,
+          url,
+          timestamp: recordingStartTimeRef.current,
+          duration,
+          mimeType: actualType
+        }
+
+        setRecordings(prev => [...prev, newRecording])
+        console.log('[RECORDING] Recording saved:', newRecording.id, 'duration:', duration, 's', 'size:', blob.size)
+
+        // 타이머 정리
+        if (recordingTimerRef.current) {
+          clearInterval(recordingTimerRef.current)
+          recordingTimerRef.current = null
+        }
+        setRecordingDuration(0)
+      }
+
+      recorder.onerror = (event) => {
+        console.error('[RECORDING] Recorder error:', event)
+      }
+
+      // 녹음 시작 (500ms마다 데이터 수집)
+      recorder.start(500)
+      setIsRecording(true)
+
+      // 녹음 시간 타이머
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingDuration(Math.floor((Date.now() - recordingStartTimeRef.current) / 1000))
+      }, 1000)
+
+      console.log('[RECORDING] Started recording, recorder state:', recorder.state)
+    } catch (err) {
+      console.error('[RECORDING] Failed to start recording:', err)
+      alert('녹음을 시작할 수 없습니다: ' + (err instanceof Error ? err.message : '알 수 없는 오류'))
+    }
+  }
+
+  // 녹음 중지
+  const stopRecording = () => {
+    if (!isRecording || !mediaRecorderRef.current) return
+
+    mediaRecorderRef.current.stop()
+    mediaRecorderRef.current = null
+    setIsRecording(false)
+    console.log('[RECORDING] Stopped recording')
+  }
+
+  // 녹음 삭제
+  const deleteRecording = (id: string) => {
+    setRecordings(prev => {
+      const recording = prev.find(r => r.id === id)
+      if (recording) {
+        URL.revokeObjectURL(recording.url) // 메모리 해제
+      }
+      return prev.filter(r => r.id !== id)
+    })
+    console.log('[RECORDING] Deleted recording:', id)
   }
 
   // 요청 승인 (방장)
@@ -1393,6 +1629,13 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         myRequestInstrument,
         requestPerform,
         cancelRequest,
+        // 녹음
+        isRecording,
+        recordings,
+        recordingDuration,
+        startRecording,
+        stopRecording,
+        deleteRecording,
       }}
     >
       {children}
