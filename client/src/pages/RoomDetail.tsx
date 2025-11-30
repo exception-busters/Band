@@ -2,8 +2,6 @@ import { useEffect, useState, useRef, memo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useRoom } from '../contexts/RoomContext'
-import { useAudioSettings } from '../contexts/AudioSettingsContext'
-import { AudioSettings } from '../components/AudioSettings'
 import { supabase } from '../lib/supabaseClient'
 
 // 안정적인 RemoteAudio 컴포넌트 (re-render 방지)
@@ -85,6 +83,25 @@ const RTC_STATUS_TEXT: Record<string, string> = {
   error: '에러',
 }
 
+const GENRES = [
+  '록', '재즈', '블루스', '클래식', '팝', '힙합',
+  '일렉트로닉', '포크', '메탈', '펑크', '레게', '기타'
+]
+
+const AVAILABLE_INSTRUMENTS = [
+  { id: 'vocal', name: '보컬', icon: '🎤' },
+  { id: 'guitar', name: '기타', icon: '🎸' },
+  { id: 'bass', name: '베이스', icon: '🎸' },
+  { id: 'keyboard', name: '건반', icon: '🎹' },
+  { id: 'drums', name: '드럼', icon: '🥁' },
+  { id: 'other', name: '기타 악기', icon: '🎵' },
+]
+
+const COMMON_TAGS = [
+  '초보환영', '경력자', '세션구함', '정기모임',
+  '즉흥연주', '커버곡', '자작곡', '녹음가능'
+]
+
 
 export function RoomDetail() {
   const { roomId } = useParams<{ roomId: string }>()
@@ -142,8 +159,6 @@ export function RoomDetail() {
     cancelRequest,
   } = useRoom()
 
-  const { settings: audioSettings, inputDevices } = useAudioSettings()
-
   // 네트워크 품질 아이콘
   const QUALITY_ICONS: Record<string, { icon: string; color: string; label: string }> = {
     excellent: { icon: '🟢', color: '#4ade80', label: '최상' },
@@ -156,18 +171,27 @@ export function RoomDetail() {
   const [room, setRoom] = useState<Room | null>(null)
   const [loading, setLoading] = useState(true)
   const [isPerformer, setIsPerformer] = useState(false)
-  const [showAudioSettings, setShowAudioSettings] = useState(false)
   const [showPendingRequests, setShowPendingRequests] = useState(false)
   const [showRoomInfo, setShowRoomInfo] = useState(false)
   const [showInstrumentSelect, setShowInstrumentSelect] = useState(false)
+  const [showRoomSettings, setShowRoomSettings] = useState(false)
+  const [hostNickname, setHostNickname] = useState<string | null>(null)
   const [chatInput, setChatInput] = useState('')
   const localPreviewRef = useRef<HTMLAudioElement | null>(null)
   const chatContainerRef = useRef<HTMLDivElement | null>(null)
   const hasJoinedRef = useRef(false)
   const hasDecrementedRef = useRef(false)
 
-  // 현재 선택된 입력 장치 이름
-  const currentInputDevice = inputDevices.find(d => d.deviceId === audioSettings.inputDeviceId)?.label || '기본 장치'
+  // 방 설정 폼 상태
+  const [editTitle, setEditTitle] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editGenre, setEditGenre] = useState('')
+  const [editMaxParticipants, setEditMaxParticipants] = useState(8)
+  const [editFreeJoin, setEditFreeJoin] = useState(true)
+  const [editInstrumentSlots, setEditInstrumentSlots] = useState<InstrumentSlot[]>([])
+  const [editTags, setEditTags] = useState<string[]>([])
+  const [editCustomTag, setEditCustomTag] = useState('')
+  const [settingsSaving, setSettingsSaving] = useState(false)
 
   // 방장 여부
   const isHost = user && room?.host_id === user.id
@@ -216,6 +240,29 @@ export function RoomDetail() {
 
     fetchRoom()
   }, [roomId, navigate])
+
+  // 방장 닉네임 가져오기
+  useEffect(() => {
+    const fetchHostNickname = async () => {
+      if (!room?.host_id || !supabase) return
+
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('nickname')
+          .eq('id', room.host_id)
+          .single()
+
+        if (error) throw error
+        setHostNickname(data?.nickname || '알 수 없음')
+      } catch (err) {
+        console.error('Failed to fetch host nickname:', err)
+        setHostNickname('알 수 없음')
+      }
+    }
+
+    fetchHostNickname()
+  }, [room?.host_id])
 
   // 방 입장 시 자동으로 joinRoom 호출 + DB 참여자 수 증가
   useEffect(() => {
@@ -446,6 +493,114 @@ export function RoomDetail() {
     }
   }
 
+  // 방 설정 모달 열기
+  const openRoomSettings = () => {
+    if (!room) return
+    setEditTitle(room.title)
+    setEditDescription(room.description || '')
+    setEditGenre(room.genre || '기타')
+    setEditMaxParticipants(room.max_participants)
+    setEditFreeJoin(room.free_join)
+    setEditInstrumentSlots([...room.instrument_slots])
+    setEditTags([...(room.tags || [])])
+    setEditCustomTag('')
+    setShowRoomSettings(true)
+  }
+
+  // 악기 슬롯 관리
+  const handleSlotCountChange = (instrument: string, count: number) => {
+    setEditInstrumentSlots(prev =>
+      prev.map(slot =>
+        slot.instrument === instrument ? { ...slot, count: Math.max(0, Math.min(10, count)) } : slot
+      )
+    )
+  }
+
+  const handleAddInstrument = (instrumentId: string) => {
+    if (!editInstrumentSlots.find(s => s.instrument === instrumentId)) {
+      setEditInstrumentSlots(prev => [...prev, { instrument: instrumentId, count: 1 }])
+    }
+  }
+
+  const handleRemoveInstrument = (instrument: string) => {
+    setEditInstrumentSlots(prev => prev.filter(s => s.instrument !== instrument))
+  }
+
+  // 태그 토글
+  const handleEditTagToggle = (tag: string) => {
+    setEditTags(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    )
+  }
+
+  // 커스텀 태그 추가
+  const handleAddEditCustomTag = () => {
+    const tag = editCustomTag.trim()
+    if (tag && !editTags.includes(tag)) {
+      setEditTags(prev => [...prev, tag])
+      setEditCustomTag('')
+    }
+  }
+
+  // 방 설정 저장
+  const handleSaveRoomSettings = async () => {
+    if (!isHost || !roomId || !supabase) return
+
+    if (!editTitle.trim()) {
+      alert('방 제목을 입력하세요.')
+      return
+    }
+
+    setSettingsSaving(true)
+
+    try {
+      const validSlots = editInstrumentSlots.filter(s => s.count > 0)
+
+      const { error } = await supabase
+        .from('rooms')
+        .update({
+          title: editTitle.trim(),
+          description: editDescription.trim() || null,
+          genre: editGenre,
+          max_participants: editMaxParticipants,
+          free_join: editFreeJoin,
+          instrument_slots: validSlots,
+          tags: editTags
+        })
+        .eq('id', roomId)
+        .eq('host_id', user!.id)
+
+      if (error) throw error
+
+      // 로컬 상태 업데이트
+      setRoom(prev => prev ? {
+        ...prev,
+        title: editTitle.trim(),
+        description: editDescription.trim() || null,
+        genre: editGenre,
+        max_participants: editMaxParticipants,
+        free_join: editFreeJoin,
+        instrument_slots: validSlots,
+        tags: editTags
+      } : null)
+
+      setShowRoomSettings(false)
+    } catch (err) {
+      console.error('Failed to update room settings:', err)
+      alert('설정 저장에 실패했습니다.')
+    } finally {
+      setSettingsSaving(false)
+    }
+  }
+
+  // 아직 추가되지 않은 악기 목록
+  const availableToAdd = AVAILABLE_INSTRUMENTS.filter(
+    inst => !editInstrumentSlots.find(s => s.instrument === inst.id)
+  )
+
+  // 총 악기 슬롯 수 계산
+  const editTotalSlots = editInstrumentSlots.reduce((sum, s) => sum + s.count, 0)
+
   // 채팅 전송
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault()
@@ -492,11 +647,6 @@ export function RoomDetail() {
 
   return (
     <div className="live-room" onClick={resumeAllAudioContexts}>
-      {/* 오디오 설정 모달 */}
-      {showAudioSettings && (
-        <AudioSettings isModal onClose={() => setShowAudioSettings(false)} />
-      )}
-
       {/* 방 정보 모달 */}
       {showRoomInfo && (
         <div className="room-info-modal">
@@ -507,16 +657,53 @@ export function RoomDetail() {
               <button onClick={() => setShowRoomInfo(false)} className="close-btn">×</button>
             </div>
             <div className="modal-body">
-              <div className="info-row"><span>방장</span><strong>{isHost ? '나' : `User ${room.host_id.slice(0, 6)}`}</strong></div>
-              <div className="info-row"><span>장르</span><strong>{room.genre || '기타'}</strong></div>
-              <div className="info-row"><span>참여 방식</span><strong>{room.free_join ? '자유 참여' : '승인 필요'}</strong></div>
-              <div className="info-row"><span>수용 인원</span><strong>{room.current_participants}/{room.max_participants}</strong></div>
-              {room.description && <p className="room-description">{room.description}</p>}
+              {/* 방 제목 */}
+              <div className="info-title-section">
+                <h3>{room.title}</h3>
+                {room.description && <p className="room-description">{room.description}</p>}
+              </div>
+
+              {/* 기본 정보 */}
+              <div className="info-section">
+                <div className="info-row"><span>👑 방장</span><strong>{hostNickname || '...'}</strong></div>
+                <div className="info-row"><span>🎵 장르</span><strong>{room.genre || '기타'}</strong></div>
+                <div className="info-row"><span>🚪 참여 방식</span><strong>{room.free_join ? '자유 참여' : '승인 필요'}</strong></div>
+                <div className="info-row"><span>👥 현재 인원</span><strong>{peers.length + 1} / {room.max_participants}명</strong></div>
+              </div>
+
+              {/* 태그 */}
               {room.tags && room.tags.length > 0 && (
-                <div className="tags-list">
-                  {room.tags.map((tag) => <span key={tag} className="tag">#{tag}</span>)}
+                <div className="info-section">
+                  <h4>태그</h4>
+                  <div className="info-tags-list">
+                    {room.tags.map((tag) => <span key={tag} className="info-tag">#{tag}</span>)}
+                  </div>
                 </div>
               )}
+
+              {/* 악기 구성 */}
+              {room.instrument_slots && room.instrument_slots.length > 0 && (
+                <div className="info-section">
+                  <h4>악기 구성</h4>
+                  <div className="info-instrument-list">
+                    {room.instrument_slots.map(slot => {
+                      const info = INSTRUMENT_INFO[slot.instrument] || { icon: '🎵', name: slot.instrument }
+                      const used = getInstrumentUsage(slot.instrument)
+                      const available = slot.count - used
+                      return (
+                        <div key={slot.instrument} className="info-instrument-item">
+                          <span className="info-inst-icon">{info.icon}</span>
+                          <span className="info-inst-name">{info.name}</span>
+                          <span className={`info-inst-slots ${available === 0 ? 'full' : ''}`}>
+                            {used}/{slot.count}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* 방장 전용 버튼들 */}
               {isHost && (
                 <div className="host-actions">
@@ -582,6 +769,210 @@ export function RoomDetail() {
         </div>
       )}
 
+      {/* 방 설정 모달 (방장용) */}
+      {showRoomSettings && (
+        <div className="room-edit-modal">
+          <div className="modal-backdrop" onClick={() => setShowRoomSettings(false)} />
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>합주실 설정</h2>
+              <button onClick={() => setShowRoomSettings(false)} className="close-btn">×</button>
+            </div>
+            <div className="modal-body">
+              <div className="edit-form-group">
+                <label htmlFor="edit-title">방 제목 *</label>
+                <input
+                  id="edit-title"
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="예: 주말 재즈 세션"
+                  maxLength={100}
+                />
+              </div>
+
+              <div className="edit-form-group">
+                <label htmlFor="edit-description">설명</label>
+                <textarea
+                  id="edit-description"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  rows={3}
+                  maxLength={500}
+                  placeholder="어떤 합주를 하고 싶으신가요? (선택사항)"
+                />
+              </div>
+
+              <div className="edit-form-row">
+                <div className="edit-form-group">
+                  <label htmlFor="edit-genre">장르</label>
+                  <select
+                    id="edit-genre"
+                    value={editGenre}
+                    onChange={(e) => setEditGenre(e.target.value)}
+                  >
+                    {GENRES.map(g => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="edit-form-group">
+                  <label htmlFor="edit-max">최대 인원</label>
+                  <select
+                    id="edit-max"
+                    value={editMaxParticipants}
+                    onChange={(e) => setEditMaxParticipants(Number(e.target.value))}
+                  >
+                    {[2, 4, 6, 8, 10, 12, 16, 20].map(n => (
+                      <option key={n} value={n}>{n}명</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* 태그 */}
+              <div className="edit-form-group">
+                <label>태그</label>
+                <div className="edit-tags-container">
+                  {COMMON_TAGS.map(tag => (
+                    <button
+                      key={tag}
+                      type="button"
+                      className={`edit-tag-btn ${editTags.includes(tag) ? 'active' : ''}`}
+                      onClick={() => handleEditTagToggle(tag)}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+                <div className="edit-custom-tag-input">
+                  <input
+                    type="text"
+                    placeholder="커스텀 태그 추가"
+                    value={editCustomTag}
+                    onChange={(e) => setEditCustomTag(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddEditCustomTag())}
+                    maxLength={20}
+                  />
+                  <button type="button" onClick={handleAddEditCustomTag}>추가</button>
+                </div>
+                {editTags.length > 0 && (
+                  <div className="edit-selected-tags">
+                    {editTags.map(tag => (
+                      <span key={tag} className="edit-selected-tag">
+                        {tag}
+                        <button type="button" onClick={() => handleEditTagToggle(tag)}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 악기 구성 */}
+              <div className="edit-form-group">
+                <label>악기 구성</label>
+                <p className="edit-form-hint">각 악기별 참여 가능 인원을 설정하세요 (총 {editTotalSlots}자리)</p>
+
+                <div className="edit-instrument-slots">
+                  {editInstrumentSlots.map(slot => {
+                    const instInfo = AVAILABLE_INSTRUMENTS.find(i => i.id === slot.instrument)
+                    return (
+                      <div key={slot.instrument} className="edit-instrument-slot">
+                        <span className="edit-slot-icon">{instInfo?.icon}</span>
+                        <span className="edit-slot-name">{instInfo?.name || slot.instrument}</span>
+                        <div className="edit-slot-count-control">
+                          <button
+                            type="button"
+                            onClick={() => handleSlotCountChange(slot.instrument, slot.count - 1)}
+                            disabled={slot.count <= 0}
+                          >
+                            -
+                          </button>
+                          <span className="edit-slot-count">{slot.count}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleSlotCountChange(slot.instrument, slot.count + 1)}
+                            disabled={slot.count >= 10}
+                          >
+                            +
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          className="edit-slot-remove"
+                          onClick={() => handleRemoveInstrument(slot.instrument)}
+                          title="악기 제거"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {availableToAdd.length > 0 && (
+                  <div className="edit-add-instrument">
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          handleAddInstrument(e.target.value)
+                          e.target.value = ''
+                        }
+                      }}
+                      defaultValue=""
+                    >
+                      <option value="" disabled>+ 악기 추가</option>
+                      {availableToAdd.map(inst => (
+                        <option key={inst.id} value={inst.id}>
+                          {inst.icon} {inst.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* 참여 방식 */}
+              <div className="edit-form-group">
+                <label>참여 방식</label>
+                <div className="edit-toggle-option">
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={editFreeJoin}
+                      onChange={(e) => setEditFreeJoin(e.target.checked)}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                  <div className="toggle-label">
+                    <strong>{editFreeJoin ? '자유 참여' : '승인 필요'}</strong>
+                    <span>{editFreeJoin ? '누구나 바로 연주자로 참여할 수 있습니다' : '방장이 승인해야 연주자로 참여할 수 있습니다'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="edit-form-actions">
+                <button
+                  onClick={() => setShowRoomSettings(false)}
+                  className="edit-cancel-btn"
+                  disabled={settingsSaving}
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleSaveRoomSettings}
+                  className="edit-save-btn"
+                  disabled={settingsSaving}
+                >
+                  {settingsSaving ? '저장 중...' : '저장'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 악기 선택 모달 */}
       {showInstrumentSelect && (
         <div className="instrument-select-modal">
@@ -633,6 +1024,7 @@ export function RoomDetail() {
               </span>
               <span className="genre-badge">{room.genre || '기타'}</span>
               <span className="viewer-count">👁 {peers.length + 1}명</span>
+              <span className="host-info">👑 {hostNickname || '...'}</span>
             </div>
           </div>
         </div>
@@ -640,9 +1032,11 @@ export function RoomDetail() {
           <button onClick={() => setShowRoomInfo(true)} className="header-btn">
             ℹ️ 정보
           </button>
-          <button onClick={() => setShowAudioSettings(true)} className="header-btn">
-            🎛️ 설정
-          </button>
+          {isHost && (
+            <button onClick={openRoomSettings} className="header-btn">
+              ⚙️ 방 설정
+            </button>
+          )}
           <button onClick={handleLeave} className="header-btn leave">
             나가기
           </button>
@@ -852,7 +1246,6 @@ export function RoomDetail() {
                     <span className="channel-name">나 (모니터)</span>
                   </div>
                   <div className="channel-info">
-                    <span className="device-info">{currentInputDevice}</span>
                     {actualStreamSettings && (
                       <span className="audio-info">
                         {actualStreamSettings.sampleRate ? `${actualStreamSettings.sampleRate / 1000}kHz` : ''}

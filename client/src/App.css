@@ -3544,6 +3544,12 @@ body {
   color: var(--text-muted);
 }
 
+.host-info {
+  font-size: 0.85rem;
+  color: var(--accent);
+  font-weight: 500;
+}
+
 .live-header-right {
   display: flex;
   gap: 12px;
@@ -4203,6 +4209,92 @@ body {
   color: var(--accent);
 }
 
+/* Enhanced Room Info Modal Styles */
+.info-title-section {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.info-title-section h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.info-title-section .room-description {
+  margin-top: 8px;
+  padding-top: 0;
+  border-top: none;
+}
+
+.info-section {
+  margin-bottom: 16px;
+}
+
+.info-section h4 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.info-tag {
+  padding: 5px 12px;
+  background: rgba(141, 123, 255, 0.15);
+  border-radius: 16px;
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
+.info-instrument-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.info-instrument-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.info-inst-icon {
+  font-size: 1.1rem;
+}
+
+.info-inst-name {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.info-inst-slots {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.info-inst-slots.full {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+}
+
 .users-list {
   display: flex;
   flex-direction: column;
@@ -4735,7 +4827,8 @@ body {
 
 /* Room Info Modal */
 .room-info-modal,
-.pending-requests-modal {
+.pending-requests-modal,
+.room-settings-modal {
   position: fixed;
   inset: 0;
   z-index: 1000;
@@ -4746,21 +4839,23 @@ body {
 
 .room-info-modal > .modal-backdrop,
 .instrument-select-modal > .modal-backdrop,
-.pending-requests-modal > .modal-backdrop {
+.pending-requests-modal > .modal-backdrop,
+.room-settings-modal > .modal-backdrop {
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.7);
 }
 
 .room-info-modal .modal-content,
-.pending-requests-modal .modal-content {
+.pending-requests-modal .modal-content,
+.room-settings-modal .modal-content {
   position: relative;
   background: var(--bg-panel);
   border-radius: 16px;
   width: 90%;
-  max-width: 400px;
-  max-height: 80vh;
-  overflow: hidden;
+  max-width: 500px;
+  max-height: 85vh;
+  overflow-y: auto;
 }
 
 .modal-header {
