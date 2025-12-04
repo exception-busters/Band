@@ -188,7 +188,6 @@ export function RoomDetail() {
   const localPreviewRef = useRef<HTMLAudioElement | null>(null)
   const chatContainerRef = useRef<HTMLDivElement | null>(null)
   const hasJoinedRef = useRef(false)
-  const hasDecrementedRef = useRef(false)
 
   // 방 설정 폼 상태
   const [editTitle, setEditTitle] = useState('')
@@ -272,7 +271,7 @@ export function RoomDetail() {
     fetchHostNickname()
   }, [room?.host_id])
 
-  // 방 입장 시 자동으로 joinRoom 호출 + DB 참여자 수 증가
+  // 방 입장 시 자동으로 joinRoom 호출 및 참여자 수 동기화
   useEffect(() => {
     // 인증 로딩이 완료될 때까지 대기 (isHost 정확히 계산하기 위해)
     if (authLoading) return
@@ -284,97 +283,72 @@ export function RoomDetail() {
       joinRoom(roomId, hostFlag || false)
       console.log('[ROOM] Joining room with isHost:', hostFlag, 'user:', user?.id, 'host_id:', room.host_id)
 
-      // DB 참여자 수 증가
-      const incrementParticipants = async () => {
-        if (!supabase) return
-        try {
-          const { error } = await supabase.rpc('increment_participants', { room_id: roomId })
-          if (error) {
-            console.error('[INCREMENT] Failed to increment participants:', error)
-          } else {
-            console.log('[INCREMENT] Successfully incremented participants for room:', roomId)
-          }
-        } catch (err) {
-          console.error('[INCREMENT] Exception while incrementing participants:', err)
-        }
+      // 입장 시 즉시 참여자 수 동기화 (peers.length + 1 = 나)
+      if (supabase) {
+        const initialCount = peers.length + 1
+        supabase
+          .from('rooms')
+          .update({ current_participants: initialCount })
+          .eq('id', roomId)
+          .then(({ error }) => {
+            if (error) {
+              console.error('[SYNC] Initial sync failed:', error)
+            } else {
+              console.log('[SYNC] Initial participants synced to', initialCount)
+            }
+          })
       }
-      incrementParticipants()
     }
-  }, [room, roomId, signalStatus, authLoading, user, joinRoom])
+  }, [room, roomId, signalStatus, authLoading, user, joinRoom, peers.length])
 
-  // 페이지 떠날 때 DB 참여자 수 감소
+  // peers 변경 시 실제 인원수로 DB 동기화 (WebSocket 연결 기준 - 항상 정확함)
+  useEffect(() => {
+    if (!roomId || !supabase || !hasJoinedRef.current) return
+
+    const actualCount = peers.length + 1 // peers + 나
+    const sb = supabase // TypeScript narrowing
+
+    const syncParticipants = async () => {
+      try {
+        const { error } = await sb
+          .from('rooms')
+          .update({ current_participants: actualCount })
+          .eq('id', roomId)
+
+        if (error) {
+          console.error('[SYNC] Failed to sync participants:', error)
+        } else {
+          console.log('[SYNC] Participants synced to', actualCount)
+        }
+      } catch (err) {
+        console.error('[SYNC] Exception while syncing participants:', err)
+      }
+    }
+
+    syncParticipants()
+  }, [roomId, peers.length])
+
+  // 페이지 이탈 시 참여자 수 감소 (cleanup)
   useEffect(() => {
     if (!roomId || !supabase) return
 
-    // 컴포넌트 마운트시 decrement ref 초기화
-    hasDecrementedRef.current = false
+    const currentRoomId = roomId
+    const sb = supabase
 
-    // sendBeacon을 사용한 decrement (더 신뢰성 높음)
-    const decrementWithBeacon = () => {
-      if (hasDecrementedRef.current) {
-        console.log('[DECREMENT] Already decremented, skipping beacon')
-        return
-      }
-      hasDecrementedRef.current = true
-
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/decrement_participants`
-      const data = JSON.stringify({ room_id: roomId })
-      const headers = {
-        type: 'application/json',
-      }
-      const blob = new Blob([data], headers)
-
-      // sendBeacon은 apikey를 URL param으로 전달해야 함
-      const urlWithKey = `${url}?apikey=${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-      const sent = navigator.sendBeacon(urlWithKey, blob)
-      console.log('[DECREMENT] sendBeacon sent:', sent, 'for room:', roomId)
-    }
-
-    // fetch 기반 decrement (일반 cleanup용)
-    const decrementWithFetch = async () => {
-      if (hasDecrementedRef.current) {
-        console.log('[DECREMENT] Already decremented, skipping fetch')
-        return
-      }
-      hasDecrementedRef.current = true
-
-      if (!supabase) return
-      try {
-        const { error } = await supabase.rpc('decrement_participants', { room_id: roomId })
-        if (error) {
-          console.error('[DECREMENT] Failed to decrement participants:', error)
-          // 실패한 경우 다시 시도할 수 있도록
-          hasDecrementedRef.current = false
-        } else {
-          console.log('[DECREMENT] Successfully decremented participants for room:', roomId)
-        }
-      } catch (err) {
-        console.error('[DECREMENT] Exception while decrementing participants:', err)
-        hasDecrementedRef.current = false
-      }
-    }
-
-    // 브라우저 닫기/새로고침 시 - sendBeacon 사용 (더 신뢰성 높음)
-    const handleBeforeUnload = () => {
-      decrementWithBeacon()
-    }
-
-    // pagehide 이벤트 (beforeunload보다 더 신뢰성 있음)
-    const handlePageHide = (e: PageTransitionEvent) => {
-      if (!e.persisted) {
-        // 실제로 페이지가 닫히는 경우
-        decrementWithBeacon()
-      }
-    }
-
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    window.addEventListener('pagehide', handlePageHide)
-
+    // cleanup: 컴포넌트 언마운트 시 (다른 페이지로 이동 또는 브라우저 종료)
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-      window.removeEventListener('pagehide', handlePageHide)
-      // React 네비게이션으로 인한 unmount - fetch 사용
-      decrementWithFetch()
+      // React 내 페이지 전환 시 decrement
+      if (hasJoinedRef.current) {
+        hasJoinedRef.current = false
+        sb.rpc('decrement_participants', { room_id: currentRoomId })
+          .then(({ error }) => {
+            if (error) {
+              console.error('[CLEANUP] Failed to decrement participants:', error)
+            } else {
+              console.log('[CLEANUP] Participants decremented for room', currentRoomId.slice(0, 8))
+            }
+          })
+      }
     }
   }, [roomId])
 
