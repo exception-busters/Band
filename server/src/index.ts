@@ -1,9 +1,46 @@
+import 'dotenv/config';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'https';
 import { readFileSync, existsSync } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
+import { createClient } from '@supabase/supabase-js';
 
 const PORT = Number(process.env.PORT || 8080);
+
+// Supabase 클라이언트 (환경 변수에서 설정)
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || '';
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+
+if (supabase) {
+	console.log('[DB] Supabase client initialized - participant sync enabled');
+} else {
+	console.log('[DB] Supabase not configured - participant sync disabled');
+	console.log('[DB] Set SUPABASE_URL and SUPABASE_SERVICE_KEY to enable');
+}
+
+// 방 참여자 수 업데이트 함수
+async function updateRoomParticipants(roomId: string) {
+	if (!supabase) return;
+
+	const room = rooms.get(roomId);
+	const count = room ? room.size : 0;
+
+	try {
+		const { error } = await supabase
+			.from('rooms')
+			.update({ current_participants: count })
+			.eq('id', roomId);
+
+		if (error) {
+			console.error('[DB] Failed to update participants:', error.message);
+		} else {
+			console.log(`[DB] Room ${roomId.slice(0, 8)} participants updated to ${count}`);
+		}
+	} catch (err) {
+		console.error('[DB] Exception updating participants:', err);
+	}
+}
 
 // 클라이언트 정보 (연주 상태 포함)
 interface Client {
@@ -14,6 +51,7 @@ interface Client {
 	instrument?: string;
 	isPerforming: boolean;
 	isHost: boolean;
+	userId?: string; // Supabase user ID (중복 연결 방지용)
 }
 
 // 참여자 정보 (클라이언트에 전송용)
@@ -152,7 +190,35 @@ wss.on('connection', (ws) => {
 				if (msg.isHost === true) {
 					client.isHost = true;
 				}
-				console.log(`[JOIN-DEBUG] Client ${id.slice(0, 8)} joining with isHost: ${msg.isHost} (type: ${typeof msg.isHost}), stored: ${client.isHost}`);
+				// userId 설정 (중복 연결 방지용)
+				if (msg.userId) {
+					client.userId = msg.userId;
+
+					// 같은 userId가 같은 방에 이미 있으면 이전 연결 정리
+					const room = rooms.get(msg.roomId);
+					if (room) {
+						for (const existingId of room) {
+							if (existingId === id) continue;
+							const existingClient = clients.get(existingId);
+							if (existingClient && existingClient.userId === msg.userId) {
+								console.log(`[JOIN] Removing duplicate connection for userId ${msg.userId.slice(0, 8)}: ${existingId.slice(0, 8)}`);
+								// 이전 연결 정리
+								room.delete(existingId);
+								// 다른 피어들에게 알림
+								for (const peerId of room) {
+									const peer = clients.get(peerId);
+									if (peer && peerId !== id) {
+										send(peer.ws, { type: 'participant-left', oderId: existingId });
+									}
+								}
+								// 이전 클라이언트 연결 종료
+								existingClient.ws.close(1000, 'Duplicate connection');
+								clients.delete(existingId);
+							}
+						}
+					}
+				}
+				console.log(`[JOIN-DEBUG] Client ${id.slice(0, 8)} joining with isHost: ${msg.isHost} (type: ${typeof msg.isHost}), stored: ${client.isHost}, userId: ${client.userId?.slice(0, 8) || 'none'}`);
 
 				client.roomId = msg.roomId;
 				if (!rooms.has(msg.roomId)) rooms.set(msg.roomId, new Set());
@@ -160,6 +226,9 @@ wss.on('connection', (ws) => {
 
 				const participants = getRoomParticipants(msg.roomId);
 				console.log(`[JOIN] Client ${id.slice(0, 8)} (${client.nickname}) joined room ${msg.roomId.slice(0, 8)}. Room size: ${participants.length}${client.isHost ? ' [HOST]' : ''}`);
+
+				// DB 참여자 수 업데이트
+				updateRoomParticipants(msg.roomId);
 
 				// 기존 피어들에게 새 참여자 알림
 				broadcastToRoom(msg.roomId, id, {
@@ -385,6 +454,9 @@ wss.on('connection', (ws) => {
 					set.delete(id);
 					console.log(`[LEAVE] Client ${id.slice(0, 8)} left room. Room size: ${set.size}`);
 
+					// DB 참여자 수 업데이트
+					updateRoomParticipants(roomId);
+
 					// 해당 사용자의 연주 요청 제거
 					const requests = performRequests.get(roomId);
 					if (requests) {
@@ -428,6 +500,9 @@ wss.on('connection', (ws) => {
 			const set = rooms.get(roomId)!;
 			set.delete(id);
 			console.log(`[LEAVE] Client ${id.slice(0, 8)} left room. Room size: ${set.size}`);
+
+			// DB 참여자 수 업데이트
+			updateRoomParticipants(roomId);
 
 			// 해당 사용자의 연주 요청 제거
 			const requests = performRequests.get(roomId);

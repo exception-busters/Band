@@ -271,7 +271,7 @@ export function RoomDetail() {
     fetchHostNickname()
   }, [room?.host_id])
 
-  // 방 입장 시 자동으로 joinRoom 호출 및 참여자 수 동기화
+  // 방 입장 시 자동으로 joinRoom 호출
   useEffect(() => {
     // 인증 로딩이 완료될 때까지 대기 (isHost 정확히 계산하기 위해)
     if (authLoading) return
@@ -282,75 +282,24 @@ export function RoomDetail() {
       const hostFlag = user && room.host_id === user.id
       joinRoom(roomId, hostFlag || false)
       console.log('[ROOM] Joining room with isHost:', hostFlag, 'user:', user?.id, 'host_id:', room.host_id)
-
-      // 입장 시 즉시 참여자 수 동기화 (peers.length + 1 = 나)
-      if (supabase) {
-        const initialCount = peers.length + 1
-        supabase
-          .from('rooms')
-          .update({ current_participants: initialCount })
-          .eq('id', roomId)
-          .then(({ error }) => {
-            if (error) {
-              console.error('[SYNC] Initial sync failed:', error)
-            } else {
-              console.log('[SYNC] Initial participants synced to', initialCount)
-            }
-          })
-      }
+      // 참여자 수 동기화는 room-state 수신 후 peers 변경 시 자동으로 처리됨
     }
-  }, [room, roomId, signalStatus, authLoading, user, joinRoom, peers.length])
+  }, [room, roomId, signalStatus, authLoading, user, joinRoom])
 
-  // peers 변경 시 실제 인원수로 DB 동기화 (WebSocket 연결 기준 - 항상 정확함)
+  // 페이지 이탈 시 cleanup (참여자 수는 서버에서 관리)
   useEffect(() => {
-    if (!roomId || !supabase || !hasJoinedRef.current) return
+    if (!roomId) return
 
-    const actualCount = peers.length + 1 // peers + 나
-    const sb = supabase // TypeScript narrowing
-
-    const syncParticipants = async () => {
-      try {
-        const { error } = await sb
-          .from('rooms')
-          .update({ current_participants: actualCount })
-          .eq('id', roomId)
-
-        if (error) {
-          console.error('[SYNC] Failed to sync participants:', error)
-        } else {
-          console.log('[SYNC] Participants synced to', actualCount)
-        }
-      } catch (err) {
-        console.error('[SYNC] Exception while syncing participants:', err)
-      }
-    }
-
-    syncParticipants()
-  }, [roomId, peers.length])
-
-  // 페이지 이탈 시 참여자 수 감소 (cleanup)
-  useEffect(() => {
-    if (!roomId || !supabase) return
-
-    const currentRoomId = roomId
-    const sb = supabase
-
-    // cleanup: 컴포넌트 언마운트 시 (다른 페이지로 이동 또는 브라우저 종료)
+    // cleanup: 컴포넌트 언마운트 시
     return () => {
-      // React 내 페이지 전환 시 decrement
       if (hasJoinedRef.current) {
         hasJoinedRef.current = false
-        sb.rpc('decrement_participants', { room_id: currentRoomId })
-          .then(({ error }) => {
-            if (error) {
-              console.error('[CLEANUP] Failed to decrement participants:', error)
-            } else {
-              console.log('[CLEANUP] Participants decremented for room', currentRoomId.slice(0, 8))
-            }
-          })
+        console.log('[CLEANUP] Left room:', roomId.slice(0, 8))
+        // 참여자 수는 서버에서 WebSocket close 이벤트로 업데이트됨
       }
     }
   }, [roomId])
+
 
   useEffect(() => {
     if (localPreviewRef.current) {

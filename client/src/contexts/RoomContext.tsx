@@ -765,7 +765,14 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       setJoinFeedback('시그널링 서버 연결을 확인하세요.')
       return
     }
-    wsRef.current.send(JSON.stringify({ type: 'join', roomId, nickname, isHost: isHost || false }))
+    // userId를 포함하여 서버에서 중복 연결 처리 가능하도록
+    wsRef.current.send(JSON.stringify({
+      type: 'join',
+      roomId,
+      nickname,
+      isHost: isHost || false,
+      userId: user?.id || null
+    }))
     setCurrentRoomId(roomId)
     setJoinFeedback('룸 입장 시도 중...')
   }
