@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom'
 import { PlanStatus } from '../components/PlanStatus'
-import { PlanSwitcher } from '../components/PlanSwitcher'
 import { AdBanner } from '../components/AdBanner'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -137,7 +136,6 @@ export function Home() {
               <h2>내 플랜 상태</h2>
             </div>
             <PlanStatus />
-            <PlanSwitcher />
           </section>
         )}
 

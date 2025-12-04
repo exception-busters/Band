@@ -2,8 +2,34 @@ import { WebSocketServer } from 'ws';
 import { createServer } from 'https';
 import { readFileSync, existsSync } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import paymentRoutes from './routes/payment';
+
+// 환경변수 로드
+dotenv.config();
 
 const PORT = Number(process.env.PORT || 8080);
+const HTTP_PORT = Number(process.env.HTTP_PORT || 3001);
+
+// Express 앱 설정
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// 결제 API 라우트
+app.use('/api/payment', paymentRoutes);
+
+// 기본 라우트
+app.get('/', (req, res) => {
+  res.json({ message: 'BandSpace API Server', version: '1.0.0' });
+});
+
+// HTTP 서버 시작
+app.listen(HTTP_PORT, () => {
+  console.log(`HTTP API server listening on http://localhost:${HTTP_PORT}`);
+});
 
 // 클라이언트 정보 (연주 상태 포함)
 interface Client {

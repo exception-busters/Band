@@ -156,53 +156,7 @@ select:disabled {
   color: #f5f7ff;
 }
 
-/* Plan Switcher (Dev Tool) */
-.plan-switcher {
-  background: rgba(255, 165, 0, 0.1);
-  border: 1px solid rgba(255, 165, 0, 0.3);
-  border-radius: 8px;
-  padding: 1rem;
-  margin-top: 1rem;
-}
 
-.plan-switcher h4 {
-  margin: 0 0 0.75rem 0;
-  color: #fbbf24;
-  font-size: 0.875rem;
-}
-
-.plan-buttons {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.plan-switch-btn {
-  padding: 0.5rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.1);
-  color: #f5f7ff;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.plan-switch-btn.active {
-  background: #7b7bff;
-  color: #050505;
-  border-color: #7b7bff;
-}
-
-.plan-switch-btn:hover:not(.active) {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.plan-switcher-note {
-  margin: 0;
-  font-size: 0.75rem;
-  color: #a0a8b8;
-}
 
 /* Feature Restrictions */
 .feature-locked {

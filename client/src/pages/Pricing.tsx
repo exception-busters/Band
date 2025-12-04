@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { usePremium } from '../contexts/PremiumContext'
 
@@ -27,6 +28,7 @@ const PLAN_FEATURES: PlanFeature[] = [
 export function Pricing() {
   const { user } = useAuth()
   const { userPlan, setUserPlan } = usePremium()
+  const navigate = useNavigate()
   const [selectedPlan, setSelectedPlan] = useState<PlanType>('standard')
 
   const handlePlanSelect = (plan: PlanType) => {
@@ -34,20 +36,19 @@ export function Pricing() {
     
     if (!user) {
       // 로그인이 필요한 경우
-      alert('플랜 변경을 위해 로그인이 필요합니다.')
+      navigate('/auth', { state: { from: `/payment?plan=${plan}` } })
       return
     }
 
-    // 개발/테스트 환경에서는 바로 플랜 변경
-    if (!import.meta.env.PROD) {
-      setUserPlan(plan)
-      alert(`플랜이 ${plan}으로 변경되었습니다!`)
+    // 무료 플랜은 바로 변경
+    if (plan === 'free') {
+      setUserPlan('free')
+      alert('무료 플랜으로 변경되었습니다.')
       return
     }
 
-    // 프로덕션에서는 실제 결제 처리
-    // TODO: 결제 처리 로직
-    console.log(`Selected plan: ${plan}`)
+    // 유료 플랜은 결제 페이지로 이동
+    navigate(`/payment?plan=${plan}`)
   }
 
   const renderFeatureValue = (value: boolean | string) => {
@@ -68,13 +69,6 @@ export function Pricing() {
       </header>
 
       <section className="pricing-plans">
-        {/* 개발 환경 알림 */}
-        {!import.meta.env.PROD && (
-          <div className="dev-notice">
-            <h3>🔧 개발 모드</h3>
-            <p>테스트를 위해 플랜을 바로 변경할 수 있습니다. 프로덕션에서는 실제 결제가 진행됩니다.</p>
-          </div>
-        )}
 
         {/* 무료 플랜 */}
         <div className={`plan-card free-plan ${userPlan === 'free' ? 'current-plan' : ''}`}>

@@ -15,10 +15,14 @@ import { MixLab } from './pages/MixLab'
 import { Community } from './pages/Community'
 import { AudioSettingsPage } from './pages/AudioSettingsPage'
 import { Pricing } from './pages/Pricing'
+import { Payment } from './pages/Payment'
+import { PaymentSuccess } from './pages/PaymentSuccess'
+import { PaymentFail } from './pages/PaymentFail'
 import { usePremium } from './contexts/PremiumContext'
 import './App.css'
 import './styles/pricing.css'
 import './styles/premium-modal.css'
+import './styles/payment.css'
 
 function AppContent() {
   const { premiumModal, closePremiumModal } = usePremium()
@@ -38,6 +42,9 @@ function AppContent() {
           <Route path="/community" element={<Community />} />
           <Route path="/settings/audio" element={<AudioSettingsPage />} />
           <Route path="/pricing" element={<Pricing />} />
+          <Route path="/payment" element={<Payment />} />
+          <Route path="/payment/success" element={<PaymentSuccess />} />
+          <Route path="/payment/fail" element={<PaymentFail />} />
         </Routes>
       </main>
       <footer className="app-footer">

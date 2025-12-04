@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 
 interface PremiumModalProps {
   isOpen: boolean
@@ -9,6 +10,8 @@ interface PremiumModalProps {
 }
 
 export function PremiumModal({ isOpen, onClose, feature, requiredPlan }: PremiumModalProps) {
+  const { user } = useAuth()
+  const navigate = useNavigate()
   const [selectedPlan, setSelectedPlan] = useState<'standard' | 'pro'>(requiredPlan)
 
   if (!isOpen) return null
@@ -44,8 +47,11 @@ export function PremiumModal({ isOpen, onClose, feature, requiredPlan }: Premium
   }
 
   const handleUpgrade = () => {
-    // TODO: 결제 처리 로직
-    console.log(`Upgrading to ${selectedPlan} plan`)
+    if (!user) {
+      navigate('/auth', { state: { from: `/payment?plan=${selectedPlan}` } })
+    } else {
+      navigate(`/payment?plan=${selectedPlan}`)
+    }
     onClose()
   }
 

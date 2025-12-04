@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react'
 import { useAuth } from './AuthContext'
+import { paymentApi } from '../services/paymentApi'
 
 type UserPlan = 'free' | 'standard' | 'pro'
 
@@ -106,16 +107,34 @@ export function PremiumProvider({ children }: PremiumProviderProps) {
     requiredPlan: 'standard' as 'standard' | 'pro'
   })
 
-  // 사용자 플랜 로드 (실제 구현에서는 DB에서 가져옴)
+  // 사용자 플랜 로드
   useEffect(() => {
-    if (user) {
-      // TODO: 실제 사용자 플랜을 DB에서 가져오기
-      // 현재는 localStorage에서 테스트용으로 가져옴
-      const savedPlan = localStorage.getItem(`userPlan_${user.id}`) as UserPlan
-      if (savedPlan && ['free', 'standard', 'pro'].includes(savedPlan)) {
-        setUserPlan(savedPlan)
+    const loadUserPlan = async () => {
+      if (user) {
+        try {
+          // 서버에서 사용자 구독 정보 가져오기
+          const result = await paymentApi.getUserSubscription(user.id)
+          if (result.success && result.user) {
+            setUserPlan(result.user.planType)
+          } else {
+            // 서버에서 정보를 가져올 수 없으면 localStorage 사용 (fallback)
+            const savedPlan = localStorage.getItem(`userPlan_${user.id}`) as UserPlan
+            if (savedPlan && ['free', 'standard', 'pro'].includes(savedPlan)) {
+              setUserPlan(savedPlan)
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load user plan:', error)
+          // 에러 발생 시 localStorage 사용 (fallback)
+          const savedPlan = localStorage.getItem(`userPlan_${user.id}`) as UserPlan
+          if (savedPlan && ['free', 'standard', 'pro'].includes(savedPlan)) {
+            setUserPlan(savedPlan)
+          }
+        }
       }
     }
+
+    loadUserPlan()
   }, [user])
 
   // 플랜 변경 시 localStorage에 저장 (테스트용)
