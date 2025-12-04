@@ -280,6 +280,27 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     if (context && context.state === 'suspended') {
       context.resume().then(() => {
         console.log('[AUDIO] AudioContext resumed')
+
+        // Resume 후 기존 스트림들 재연결 (suspended 상태에서 연결된 노드들 복구)
+        Object.entries(remoteAudioMap).forEach(([peerId, stream]) => {
+          // 기존 노드 제거 후 재연결
+          const existingNodes = audioNodesRef.current.get(peerId)
+          if (existingNodes) {
+            try {
+              existingNodes.source.disconnect()
+              existingNodes.analyser.disconnect()
+              existingNodes.gain.disconnect()
+              existingNodes.panner.disconnect()
+              audioNodesRef.current.delete(peerId)
+              console.log('[AUDIO] Removed old nodes for reconnection:', peerId.slice(0, 8))
+            } catch (e) {
+              // 이미 disconnect된 경우 무시
+            }
+          }
+          // 새로 연결
+          connectToWebAudio(peerId, stream)
+          console.log('[AUDIO] Reconnected after resume:', peerId.slice(0, 8))
+        })
       })
     }
   }
