@@ -2,7 +2,9 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { RoomProvider } from './contexts/RoomContext'
 import { AudioSettingsProvider } from './contexts/AudioSettingsContext'
+import { PremiumProvider } from './contexts/PremiumContext'
 import { Navigation } from './components/Navigation'
+import { PremiumModal } from './components/PremiumModal'
 import { Home } from './pages/Home'
 import { Auth } from './pages/Auth'
 import { Rooms } from './pages/Rooms'
@@ -12,35 +14,57 @@ import { Recording } from './pages/Recording'
 import { MixLab } from './pages/MixLab'
 import { Community } from './pages/Community'
 import { AudioSettingsPage } from './pages/AudioSettingsPage'
+import { Pricing } from './pages/Pricing'
+import { usePremium } from './contexts/PremiumContext'
 import './App.css'
+import './styles/pricing.css'
+import './styles/premium-modal.css'
+
+function AppContent() {
+  const { premiumModal, closePremiumModal } = usePremium()
+
+  return (
+    <div className="app">
+      <Navigation />
+      <main className="app-content">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/rooms" element={<Rooms />} />
+          <Route path="/rooms/create" element={<CreateRoom />} />
+          <Route path="/rooms/:roomId" element={<RoomDetail />} />
+          <Route path="/recording" element={<Recording />} />
+          <Route path="/mix" element={<MixLab />} />
+          <Route path="/community" element={<Community />} />
+          <Route path="/settings/audio" element={<AudioSettingsPage />} />
+          <Route path="/pricing" element={<Pricing />} />
+        </Routes>
+      </main>
+      <footer className="app-footer">
+        <p>BandSpace · Syncroom-inspired 데모. 데스크톱 / 모바일 확장을 준비 중입니다.</p>
+      </footer>
+      
+      <PremiumModal
+        isOpen={premiumModal.isOpen}
+        onClose={closePremiumModal}
+        feature={premiumModal.feature}
+        requiredPlan={premiumModal.requiredPlan}
+      />
+    </div>
+  )
+}
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AudioSettingsProvider>
-          <RoomProvider>
-            <div className="app">
-              <Navigation />
-              <main className="app-content">
-                <Routes>
-                  <Route path="/" element={<Home />} />
-                  <Route path="/auth" element={<Auth />} />
-                  <Route path="/rooms" element={<Rooms />} />
-                  <Route path="/rooms/create" element={<CreateRoom />} />
-                  <Route path="/rooms/:roomId" element={<RoomDetail />} />
-                  <Route path="/recording" element={<Recording />} />
-                  <Route path="/mix" element={<MixLab />} />
-                  <Route path="/community" element={<Community />} />
-                  <Route path="/settings/audio" element={<AudioSettingsPage />} />
-                </Routes>
-              </main>
-              <footer className="app-footer">
-                <p>BandSpace · Syncroom-inspired 데모. 데스크톱 / 모바일 확장을 준비 중입니다.</p>
-              </footer>
-            </div>
-          </RoomProvider>
-        </AudioSettingsProvider>
+        <PremiumProvider>
+          <AudioSettingsProvider>
+            <RoomProvider>
+              <AppContent />
+            </RoomProvider>
+          </AudioSettingsProvider>
+        </PremiumProvider>
       </AuthProvider>
     </BrowserRouter>
   )
