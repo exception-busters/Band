@@ -1354,6 +1354,45 @@ export function RoomDetail() {
               <span>연주 참여 요청</span>
             </div>
           )}
+
+          {/* 방장: 악기 변경 요청 목록 */}
+          {isHost && pendingInstrumentChanges.length > 0 && (
+            <div className="instrument-change-requests-section">
+              <div className="section-header">
+                <span className="alert-badge">{pendingInstrumentChanges.length}</span>
+                <span>🔄 악기 변경 요청</span>
+              </div>
+              <div className="change-requests-list">
+                {pendingInstrumentChanges.map(request => (
+                  <div key={request.oderId} className="change-request-item">
+                    <div className="request-info">
+                      <span className="requester-name">{request.nickname}</span>
+                      <span className="change-detail">
+                        {INSTRUMENT_INFO[request.currentInstrument]?.icon || '🎵'} → {INSTRUMENT_INFO[request.newInstrument]?.icon || '🎵'}
+                        {INSTRUMENT_INFO[request.newInstrument]?.name || request.newInstrument}
+                      </span>
+                    </div>
+                    <div className="request-actions">
+                      <button
+                        onClick={() => approveInstrumentChange(request.oderId)}
+                        className="approve-btn"
+                        title="승인"
+                      >
+                        ✓
+                      </button>
+                      <button
+                        onClick={() => rejectInstrumentChange(request.oderId)}
+                        className="reject-btn"
+                        title="거절"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </aside>
 
         {/* 가운데: 믹서 */}

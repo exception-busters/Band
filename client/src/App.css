@@ -3832,6 +3832,96 @@ body {
   color: white;
 }
 
+/* 악기 변경 요청 섹션 (방장용) */
+.instrument-change-requests-section {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(250, 204, 21, 0.1);
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  border-radius: 12px;
+}
+
+.instrument-change-requests-section .section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #facc15;
+  margin-bottom: 8px;
+}
+
+.change-requests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.change-request-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+}
+
+.change-request-item .request-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.change-request-item .requester-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.change-request-item .change-detail {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.change-request-item .request-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.change-request-item .approve-btn,
+.change-request-item .reject-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.change-request-item .approve-btn {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+}
+
+.change-request-item .approve-btn:hover {
+  background: rgba(74, 222, 128, 0.4);
+  transform: scale(1.1);
+}
+
+.change-request-item .reject-btn {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+}
+
+.change-request-item .reject-btn:hover {
+  background: rgba(248, 113, 113, 0.4);
+  transform: scale(1.1);
+}
+
 /* 레이턴시 표시 */
 .performer-latency {
   display: flex;
