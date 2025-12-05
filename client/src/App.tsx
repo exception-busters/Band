@@ -11,6 +11,8 @@ import { RoomDetail } from './pages/RoomDetail'
 import { Recording } from './pages/Recording'
 import { MixLab } from './pages/MixLab'
 import { Community } from './pages/Community'
+import { CreatePost } from './pages/CreatePost'
+import { PostDetail } from './pages/PostDetail'
 import { AudioSettingsPage } from './pages/AudioSettingsPage'
 import './App.css'
 
@@ -32,6 +34,8 @@ function App() {
                   <Route path="/recording" element={<Recording />} />
                   <Route path="/mix" element={<MixLab />} />
                   <Route path="/community" element={<Community />} />
+                  <Route path="/community/create" element={<CreatePost />} />
+                  <Route path="/community/:postId" element={<PostDetail />} />
                   <Route path="/settings/audio" element={<AudioSettingsPage />} />
                 </Routes>
               </main>
