@@ -157,6 +157,14 @@ export function RoomDetail() {
     myRequestInstrument,
     requestPerform,
     cancelRequest,
+    // 악기 변경 요청
+    pendingInstrumentChanges,
+    approveInstrumentChange,
+    rejectInstrumentChange,
+    myInstrumentChangeStatus,
+    myNewInstrument,
+    requestInstrumentChange,
+    cancelInstrumentChangeRequest,
     // 녹음
     isRecording,
     recordings,
@@ -188,6 +196,7 @@ export function RoomDetail() {
   const [showInstrumentSelect, setShowInstrumentSelect] = useState(false)
   const [showRoomSettings, setShowRoomSettings] = useState(false)
   const [showRecordings, setShowRecordings] = useState(false)
+  const [showInstrumentChangeModal, setShowInstrumentChangeModal] = useState(false)
   const [hostNickname, setHostNickname] = useState<string | null>(null)
   const [chatInput, setChatInput] = useState('')
   const localPreviewRef = useRef<HTMLAudioElement | null>(null)
@@ -1014,6 +1023,59 @@ export function RoomDetail() {
         </div>
       )}
 
+      {/* 악기 변경 요청 모달 */}
+      {showInstrumentChangeModal && (
+        <div className="instrument-select-modal">
+          <div className="modal-backdrop" onClick={() => setShowInstrumentChangeModal(false)} />
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>🔄 악기 변경 요청</h2>
+              <button onClick={() => setShowInstrumentChangeModal(false)} className="close-btn">×</button>
+            </div>
+            <div className="modal-body">
+              <p className="modal-description">
+                현재 악기: <strong>{INSTRUMENT_INFO[myInstrument || '']?.name || myInstrument}</strong>
+              </p>
+              <p className="modal-description">변경할 악기를 선택하세요 (방장의 승인이 필요합니다)</p>
+              <div className="instrument-grid">
+                {room?.instrument_slots?.map(slot => {
+                  const info = INSTRUMENT_INFO[slot.instrument] || { icon: '🎵', name: slot.instrument }
+                  const used = getInstrumentUsage(slot.instrument)
+                  // 현재 내 악기는 내가 사용 중이므로 1 빼줌
+                  const myCurrentUsage = slot.instrument === myInstrument ? 1 : 0
+                  const available = slot.count - used + myCurrentUsage
+                  const isAvailable = available > 0 && slot.instrument !== myInstrument
+
+                  return (
+                    <button
+                      key={slot.instrument}
+                      className={`instrument-option ${!isAvailable ? 'disabled' : ''} ${slot.instrument === myInstrument ? 'current' : ''}`}
+                      onClick={() => {
+                        if (isAvailable) {
+                          requestInstrumentChange(slot.instrument)
+                          setShowInstrumentChangeModal(false)
+                        }
+                      }}
+                      disabled={!isAvailable}
+                    >
+                      <span className="inst-icon">{info.icon}</span>
+                      <span className="inst-name">{info.name}</span>
+                      {slot.instrument === myInstrument ? (
+                        <span className="inst-slots current">현재</span>
+                      ) : (
+                        <span className={`inst-slots ${available === 0 ? 'full' : ''}`}>
+                          {available}/{slot.count}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 녹음 목록 모달 */}
       {showRecordings && (
         <div className="recordings-modal">
@@ -1128,6 +1190,32 @@ export function RoomDetail() {
                 <div className="performer-info">
                   <span className="performer-name">{nickname} {isHost && '(방장)'}</span>
                   <span className="performer-instrument">{INSTRUMENT_INFO[myInstrument]?.name || myInstrument}</span>
+                  {/* 방장이 아닌 연주자: 악기 변경 요청 UI */}
+                  {!isHost && myInstrumentChangeStatus === 'none' && (
+                    <button
+                      onClick={() => setShowInstrumentChangeModal(true)}
+                      className="change-instrument-btn"
+                      title="악기 변경 요청"
+                    >
+                      🔄 악기 변경
+                    </button>
+                  )}
+                  {!isHost && myInstrumentChangeStatus === 'pending' && (
+                    <div className="my-instrument-change-status pending">
+                      <span>⏳ 변경 요청 중: {INSTRUMENT_INFO[myNewInstrument || '']?.name || myNewInstrument}</span>
+                      <button onClick={cancelInstrumentChangeRequest} className="cancel-btn small">취소</button>
+                    </div>
+                  )}
+                  {!isHost && myInstrumentChangeStatus === 'approved' && (
+                    <div className="my-instrument-change-status approved">
+                      <span>✅ 변경 승인됨!</span>
+                    </div>
+                  )}
+                  {!isHost && myInstrumentChangeStatus === 'rejected' && (
+                    <div className="my-instrument-change-status rejected">
+                      <span>❌ 변경 거절됨</span>
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={toggleLocalMute}
@@ -1146,6 +1234,8 @@ export function RoomDetail() {
               const netStats = peerNetworkStats[oderId]
               const qualityInfo = QUALITY_ICONS[netStats?.quality || 'unknown']
               const hasAudioStream = remoteAudioMap[oderId] !== undefined
+              // 이 연주자의 악기 변경 요청 확인
+              const instrumentChangeRequest = pendingInstrumentChanges.find(r => r.oderId === oderId)
 
               return (
                 <div key={oderId} className={`performer-item ${hasAudioStream ? 'active' : 'connecting'}`}>
@@ -1159,6 +1249,30 @@ export function RoomDetail() {
                   <div className="performer-info">
                     <span className="performer-name">{peerInfo.nickname || `연주자 ${oderId.slice(0, 4)}`} {peerInfo.isHost && '(방장)'}</span>
                     <span className="performer-instrument">{instInfo.name}</span>
+                    {/* 방장에게 악기 변경 요청 표시 */}
+                    {isHost && instrumentChangeRequest && (
+                      <div className="instrument-change-request">
+                        <span className="change-request-text">
+                          🔄 {INSTRUMENT_INFO[instrumentChangeRequest.newInstrument]?.name || instrumentChangeRequest.newInstrument}(으)로 변경 요청
+                        </span>
+                        <div className="change-request-actions">
+                          <button
+                            onClick={() => approveInstrumentChange(oderId)}
+                            className="approve-btn small"
+                            title="승인"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={() => rejectInstrumentChange(oderId)}
+                            className="reject-btn small"
+                            title="거절"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   {/* 네트워크 상태 표시 */}
                   <div className="performer-latency" title={`레이턴시: ${netStats?.latency ?? '?'}ms | 지터: ${netStats?.jitter ?? '?'}ms | 품질: ${qualityInfo.label}`}>

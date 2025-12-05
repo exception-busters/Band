@@ -49,6 +49,15 @@ export interface PerformRequest {
   timestamp: number
 }
 
+// 악기 변경 요청
+export interface InstrumentChangeRequest {
+  oderId: string
+  nickname: string
+  currentInstrument: string
+  newInstrument: string
+  timestamp: number
+}
+
 // 내 요청 상태
 export type MyRequestStatus = 'none' | 'pending' | 'approved' | 'rejected'
 
@@ -136,6 +145,17 @@ type RoomContextType = {
   myRequestInstrument: string | null
   requestPerform: (instrument: string) => void
   cancelRequest: () => void
+
+  // 악기 변경 요청 (방장용)
+  pendingInstrumentChanges: InstrumentChangeRequest[]
+  approveInstrumentChange: (oderId: string) => void
+  rejectInstrumentChange: (oderId: string, reason?: string) => void
+
+  // 악기 변경 요청 (연주자용)
+  myInstrumentChangeStatus: MyRequestStatus
+  myNewInstrument: string | null
+  requestInstrumentChange: (newInstrument: string) => void
+  cancelInstrumentChangeRequest: () => void
 
   // 녹음
   isRecording: boolean
@@ -379,6 +399,13 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   // 내 요청 상태 (요청자용)
   const [myRequestStatus, setMyRequestStatus] = useState<MyRequestStatus>('none')
   const [myRequestInstrument, setMyRequestInstrument] = useState<string | null>(null)
+
+  // 악기 변경 요청 상태 (방장용)
+  const [pendingInstrumentChanges, setPendingInstrumentChanges] = useState<InstrumentChangeRequest[]>([])
+
+  // 악기 변경 요청 상태 (연주자용)
+  const [myInstrumentChangeStatus, setMyInstrumentChangeStatus] = useState<MyRequestStatus>('none')
+  const [myNewInstrument, setMyNewInstrument] = useState<string | null>(null)
 
   // 녹음 상태
   const [isRecording, setIsRecording] = useState(false)
@@ -1005,6 +1032,49 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     console.log('[REQUEST] Cancelled perform request')
   }
 
+  // 악기 변경 요청 (연주자가 방장에게 요청)
+  const requestInstrumentChange = (newInstrument: string) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({
+      type: 'request-instrument-change',
+      newInstrument
+    }))
+    setMyNewInstrument(newInstrument)
+    console.log('[INSTRUMENT-CHANGE] Sent instrument change request for:', newInstrument)
+  }
+
+  // 악기 변경 요청 취소
+  const cancelInstrumentChangeRequest = () => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({ type: 'cancel-instrument-change-request' }))
+    setMyInstrumentChangeStatus('none')
+    setMyNewInstrument(null)
+    console.log('[INSTRUMENT-CHANGE] Cancelled instrument change request')
+  }
+
+  // 악기 변경 요청 승인 (방장)
+  const approveInstrumentChange = (oderId: string) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({
+      type: 'approve-instrument-change',
+      targetId: oderId
+    }))
+    setPendingInstrumentChanges(prev => prev.filter(r => r.oderId !== oderId))
+    console.log('[INSTRUMENT-CHANGE] Approved instrument change for:', oderId)
+  }
+
+  // 악기 변경 요청 거절 (방장)
+  const rejectInstrumentChange = (oderId: string, reason?: string) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({
+      type: 'reject-instrument-change',
+      targetId: oderId,
+      reason
+    }))
+    setPendingInstrumentChanges(prev => prev.filter(r => r.oderId !== oderId))
+    console.log('[INSTRUMENT-CHANGE] Rejected instrument change for:', oderId)
+  }
+
   // === 녹음 기능 ===
 
   // 지원되는 MIME 타입 찾기
@@ -1590,6 +1660,73 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           setMyRequestStatus('rejected')
           return
         }
+
+        // === 악기 변경 요청 관련 메시지 ===
+
+        // 악기 변경 요청 전송 확인 (연주자)
+        if (payload.type === 'instrument-change-request-sent') {
+          setMyInstrumentChangeStatus('pending')
+          console.log('[INSTRUMENT-CHANGE] Request sent, waiting for approval')
+          return
+        }
+
+        // 악기 변경 요청 수신 (방장)
+        if (payload.type === 'instrument-change-request-received' && payload.request) {
+          console.log('[INSTRUMENT-CHANGE] Received instrument change request:', payload.request)
+          setPendingInstrumentChanges(prev => {
+            // 중복 방지
+            if (prev.some(r => r.oderId === payload.request.oderId)) return prev
+            return [...prev, payload.request]
+          })
+          return
+        }
+
+        // 악기 변경 요청 취소됨 (방장)
+        if (payload.type === 'instrument-change-request-cancelled' && payload.oderId) {
+          console.log('[INSTRUMENT-CHANGE] Request cancelled by:', payload.oderId.slice(0, 8))
+          setPendingInstrumentChanges(prev => prev.filter(r => r.oderId !== payload.oderId))
+          return
+        }
+
+        // 악기 변경 승인됨 (연주자)
+        if (payload.type === 'instrument-change-approved') {
+          console.log('[INSTRUMENT-CHANGE] Approved! New instrument:', payload.newInstrument)
+          setMyInstrumentChangeStatus('approved')
+          setMyInstrument(payload.newInstrument)
+          // 상태 초기화
+          setTimeout(() => {
+            setMyInstrumentChangeStatus('none')
+            setMyNewInstrument(null)
+          }, 2000)
+          return
+        }
+
+        // 악기 변경 거절됨 (연주자)
+        if (payload.type === 'instrument-change-rejected') {
+          console.log('[INSTRUMENT-CHANGE] Rejected:', payload.reason)
+          setMyInstrumentChangeStatus('rejected')
+          setTimeout(() => {
+            setMyInstrumentChangeStatus('none')
+            setMyNewInstrument(null)
+          }, 3000)
+          return
+        }
+
+        // 다른 참여자의 악기 변경됨
+        if (payload.type === 'participant-instrument-changed' && payload.oderId && payload.instrument) {
+          console.log('[INSTRUMENT-CHANGE] Participant changed instrument:', payload.oderId.slice(0, 8), '->', payload.instrument)
+          setPeerInstruments(prev => {
+            if (!prev[payload.oderId]) return prev
+            return {
+              ...prev,
+              [payload.oderId]: {
+                ...prev[payload.oderId],
+                instrument: payload.instrument
+              }
+            }
+          })
+          return
+        }
         } catch {
           // ignore malformed payloads
         }
@@ -1786,6 +1923,15 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         myRequestInstrument,
         requestPerform,
         cancelRequest,
+        // 악기 변경 요청 (방장용)
+        pendingInstrumentChanges,
+        approveInstrumentChange,
+        rejectInstrumentChange,
+        // 악기 변경 요청 (연주자용)
+        myInstrumentChangeStatus,
+        myNewInstrument,
+        requestInstrumentChange,
+        cancelInstrumentChangeRequest,
         // 녹음
         isRecording,
         recordings,

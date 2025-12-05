@@ -83,6 +83,15 @@ interface PerformRequest {
 	timestamp: number;
 }
 
+// 악기 변경 요청 정보
+interface InstrumentChangeRequest {
+	oderId: string;
+	nickname: string;
+	currentInstrument: string;
+	newInstrument: string;
+	timestamp: number;
+}
+
 // HTTPS 서버 설정 (자체 서명 인증서 사용)
 let wss: WebSocketServer;
 
@@ -115,6 +124,7 @@ if (existsSync(certPath) && existsSync(keyPath)) {
 const rooms = new Map<string, Set<string>>(); // roomId -> clientIds
 const clients = new Map<string, Client>(); // clientId -> client
 const performRequests = new Map<string, PerformRequest[]>(); // roomId -> pending requests
+const instrumentChangeRequests = new Map<string, InstrumentChangeRequest[]>(); // roomId -> pending instrument change requests
 
 function send(ws: import('ws').WebSocket, data: any) {
 	if (ws.readyState === ws.OPEN) {
@@ -267,10 +277,22 @@ wss.on('connection', (ws) => {
 				if (client.isHost) {
 					const pendingRequests = performRequests.get(msg.roomId) || [];
 					if (pendingRequests.length > 0) {
-						console.log(`[JOIN] Sending ${pendingRequests.length} pending requests to host`);
+						console.log(`[JOIN] Sending ${pendingRequests.length} pending perform requests to host`);
 						for (const request of pendingRequests) {
 							send(ws, {
 								type: 'perform-request-received',
+								request
+							});
+						}
+					}
+
+					// 대기 중인 악기 변경 요청들도 전송
+					const pendingInstrumentChanges = instrumentChangeRequests.get(msg.roomId) || [];
+					if (pendingInstrumentChanges.length > 0) {
+						console.log(`[JOIN] Sending ${pendingInstrumentChanges.length} pending instrument change requests to host`);
+						for (const request of pendingInstrumentChanges) {
+							send(ws, {
+								type: 'instrument-change-request-received',
 								request
 							});
 						}
@@ -472,6 +494,157 @@ wss.on('connection', (ws) => {
 				return;
 			}
 
+			// 악기 변경 요청 (연주자 -> 방장)
+			if (msg.type === 'request-instrument-change' && client.roomId && client.isPerforming && msg.newInstrument) {
+				const roomId = client.roomId;
+
+				// 요청 저장
+				if (!instrumentChangeRequests.has(roomId)) {
+					instrumentChangeRequests.set(roomId, []);
+				}
+				const requests = instrumentChangeRequests.get(roomId)!;
+
+				// 이미 요청한 경우 중복 방지
+				const existing = requests.find(r => r.oderId === id);
+				if (existing) {
+					console.log(`[INSTRUMENT-CHANGE] Duplicate request from ${id.slice(0, 8)}`);
+					return;
+				}
+
+				const request: InstrumentChangeRequest = {
+					oderId: id,
+					nickname: client.nickname,
+					currentInstrument: client.instrument || '',
+					newInstrument: msg.newInstrument,
+					timestamp: Date.now()
+				};
+				requests.push(request);
+
+				console.log(`[INSTRUMENT-CHANGE] ${id.slice(0, 8)} (${client.nickname}) requested to change: ${client.instrument} -> ${msg.newInstrument}`);
+
+				// 방장에게 요청 알림
+				const host = findRoomHost(roomId);
+				if (host) {
+					send(host.ws, {
+						type: 'instrument-change-request-received',
+						request
+					});
+				} else {
+					console.log(`[INSTRUMENT-CHANGE] Host not in room, request queued for later`);
+				}
+
+				// 요청자에게 확인
+				send(ws, {
+					type: 'instrument-change-request-sent',
+					newInstrument: msg.newInstrument
+				});
+				return;
+			}
+
+			// 악기 변경 승인 (방장 -> 연주자)
+			if (msg.type === 'approve-instrument-change' && client.roomId && client.isHost && msg.targetId) {
+				const roomId = client.roomId;
+				const requests = instrumentChangeRequests.get(roomId);
+				const target = clients.get(msg.targetId);
+
+				if (!requests || !target) {
+					console.log(`[APPROVE-INSTRUMENT-CHANGE] Request or target not found`);
+					return;
+				}
+
+				const requestIndex = requests.findIndex(r => r.oderId === msg.targetId);
+				if (requestIndex === -1) {
+					console.log(`[APPROVE-INSTRUMENT-CHANGE] Request not found for ${msg.targetId.slice(0, 8)}`);
+					return;
+				}
+
+				const request = requests[requestIndex];
+				requests.splice(requestIndex, 1);
+
+				// 대상의 악기 변경
+				target.instrument = request.newInstrument;
+
+				console.log(`[APPROVE-INSTRUMENT-CHANGE] Host approved ${msg.targetId.slice(0, 8)} instrument change to ${request.newInstrument}`);
+
+				// 승인된 사용자에게 알림
+				send(target.ws, {
+					type: 'instrument-change-approved',
+					newInstrument: request.newInstrument
+				});
+
+				// 방의 모든 참여자에게 악기 변경 알림
+				const room = rooms.get(roomId);
+				if (room) {
+					for (const oderId of room) {
+						const peer = clients.get(oderId);
+						if (peer && peer.id !== msg.targetId) {
+							send(peer.ws, {
+								type: 'participant-instrument-changed',
+								oderId: msg.targetId,
+								instrument: request.newInstrument
+							});
+						}
+					}
+				}
+				return;
+			}
+
+			// 악기 변경 거절 (방장 -> 연주자)
+			if (msg.type === 'reject-instrument-change' && client.roomId && client.isHost && msg.targetId) {
+				const roomId = client.roomId;
+				const requests = instrumentChangeRequests.get(roomId);
+				const target = clients.get(msg.targetId);
+
+				if (!requests) {
+					console.log(`[REJECT-INSTRUMENT-CHANGE] No requests for room`);
+					return;
+				}
+
+				const requestIndex = requests.findIndex(r => r.oderId === msg.targetId);
+				if (requestIndex === -1) {
+					console.log(`[REJECT-INSTRUMENT-CHANGE] Request not found for ${msg.targetId?.slice(0, 8)}`);
+					return;
+				}
+
+				const request = requests[requestIndex];
+				requests.splice(requestIndex, 1);
+
+				console.log(`[REJECT-INSTRUMENT-CHANGE] Host rejected ${msg.targetId.slice(0, 8)} instrument change`);
+
+				// 거절된 사용자에게 알림
+				if (target) {
+					send(target.ws, {
+						type: 'instrument-change-rejected',
+						reason: msg.reason || '방장이 악기 변경을 거절했습니다.'
+					});
+				}
+				return;
+			}
+
+			// 악기 변경 요청 취소 (연주자)
+			if (msg.type === 'cancel-instrument-change-request' && client.roomId) {
+				const roomId = client.roomId;
+				const requests = instrumentChangeRequests.get(roomId);
+				const host = findRoomHost(roomId);
+
+				if (requests) {
+					const requestIndex = requests.findIndex(r => r.oderId === id);
+					if (requestIndex !== -1) {
+						requests.splice(requestIndex, 1);
+						console.log(`[CANCEL-INSTRUMENT-CHANGE] ${id.slice(0, 8)} cancelled their instrument change request`);
+
+						// 방장에게 취소 알림
+						if (host) {
+							send(host.ws, {
+								type: 'instrument-change-request-cancelled',
+								oderId: id
+							});
+						}
+					}
+				}
+				return;
+			}
+
 			// 방 나가기 (명시적)
 			if (msg.type === 'leave' && client.roomId) {
 				const roomId = client.roomId;
@@ -483,6 +656,8 @@ wss.on('connection', (ws) => {
 					// DB 참여자 수 업데이트
 					updateRoomParticipants(roomId);
 
+					const host = findRoomHost(roomId);
+
 					// 해당 사용자의 연주 요청 제거
 					const requests = performRequests.get(roomId);
 					if (requests) {
@@ -490,9 +665,21 @@ wss.on('connection', (ws) => {
 						if (idx !== -1) {
 							requests.splice(idx, 1);
 							// 방장에게 알림
-							const host = findRoomHost(roomId);
 							if (host) {
 								send(host.ws, { type: 'perform-request-cancelled', oderId: id });
+							}
+						}
+					}
+
+					// 해당 사용자의 악기 변경 요청 제거
+					const changeRequests = instrumentChangeRequests.get(roomId);
+					if (changeRequests) {
+						const idx = changeRequests.findIndex(r => r.oderId === id);
+						if (idx !== -1) {
+							changeRequests.splice(idx, 1);
+							// 방장에게 알림
+							if (host) {
+								send(host.ws, { type: 'instrument-change-request-cancelled', oderId: id });
 							}
 						}
 					}
@@ -506,6 +693,7 @@ wss.on('connection', (ws) => {
 					if (set.size === 0) {
 						rooms.delete(roomId);
 						performRequests.delete(roomId);
+						instrumentChangeRequests.delete(roomId);
 					}
 				}
 				client.roomId = undefined;
@@ -530,6 +718,8 @@ wss.on('connection', (ws) => {
 			// DB 참여자 수 업데이트
 			updateRoomParticipants(roomId);
 
+			const host = findRoomHost(roomId);
+
 			// 해당 사용자의 연주 요청 제거
 			const requests = performRequests.get(roomId);
 			if (requests) {
@@ -537,9 +727,21 @@ wss.on('connection', (ws) => {
 				if (idx !== -1) {
 					requests.splice(idx, 1);
 					// 방장에게 알림
-					const host = findRoomHost(roomId);
 					if (host) {
 						send(host.ws, { type: 'perform-request-cancelled', oderId: id });
+					}
+				}
+			}
+
+			// 해당 사용자의 악기 변경 요청 제거
+			const changeRequests = instrumentChangeRequests.get(roomId);
+			if (changeRequests) {
+				const idx = changeRequests.findIndex(r => r.oderId === id);
+				if (idx !== -1) {
+					changeRequests.splice(idx, 1);
+					// 방장에게 알림
+					if (host) {
+						send(host.ws, { type: 'instrument-change-request-cancelled', oderId: id });
 					}
 				}
 			}
@@ -553,6 +755,7 @@ wss.on('connection', (ws) => {
 			if (set.size === 0) {
 				rooms.delete(roomId);
 				performRequests.delete(roomId);
+				instrumentChangeRequests.delete(roomId);
 			}
 		}
 

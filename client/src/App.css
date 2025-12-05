@@ -3708,6 +3708,130 @@ body {
   color: var(--success);
 }
 
+/* 악기 변경 요청 버튼 */
+.change-instrument-btn {
+  margin-top: 4px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: 10px;
+  color: var(--primary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.change-instrument-btn:hover {
+  background: rgba(99, 102, 241, 0.3);
+  border-color: var(--primary);
+}
+
+/* 내 악기 변경 요청 상태 */
+.my-instrument-change-status {
+  margin-top: 4px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.my-instrument-change-status.pending {
+  background: rgba(250, 204, 21, 0.15);
+  color: #facc15;
+}
+
+.my-instrument-change-status.approved {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+.my-instrument-change-status.rejected {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+.my-instrument-change-status .cancel-btn.small {
+  padding: 1px 6px;
+  font-size: 0.65rem;
+  background: rgba(248, 113, 113, 0.2);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  border-radius: 6px;
+  color: #f87171;
+  cursor: pointer;
+}
+
+.my-instrument-change-status .cancel-btn.small:hover {
+  background: rgba(248, 113, 113, 0.4);
+}
+
+/* 방장에게 표시되는 악기 변경 요청 */
+.instrument-change-request {
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: rgba(250, 204, 21, 0.15);
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.change-request-text {
+  font-size: 0.7rem;
+  color: #facc15;
+}
+
+.change-request-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.change-request-actions .approve-btn.small,
+.change-request-actions .reject-btn.small {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.change-request-actions .approve-btn.small {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+}
+
+.change-request-actions .approve-btn.small:hover {
+  background: rgba(74, 222, 128, 0.4);
+}
+
+.change-request-actions .reject-btn.small {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+}
+
+.change-request-actions .reject-btn.small:hover {
+  background: rgba(248, 113, 113, 0.4);
+}
+
+/* 악기 옵션 - 현재 선택된 악기 표시 */
+.instrument-option.current {
+  border-color: var(--primary);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.inst-slots.current {
+  background: var(--primary);
+  color: white;
+}
+
 /* 레이턴시 표시 */
 .performer-latency {
   display: flex;
