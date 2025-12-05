@@ -42,6 +42,8 @@ function AppContent() {
           <Route path="/recording" element={<Recording />} />
           <Route path="/mix" element={<MixLab />} />
           <Route path="/community" element={<Community />} />
+          <Route path="/community/create" element={<CreatePost />} />
+          <Route path="/community/:postId" element={<PostDetail />} />
           <Route path="/settings/audio" element={<AudioSettingsPage />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/payment" element={<Payment />} />
@@ -52,7 +54,7 @@ function AppContent() {
       <footer className="app-footer">
         <p>BandSpace · Syncroom-inspired 데모. 데스크톱 / 모바일 확장을 준비 중입니다.</p>
       </footer>
-      
+
       <PremiumModal
         isOpen={premiumModal.isOpen}
         onClose={closePremiumModal}
@@ -67,32 +69,13 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AudioSettingsProvider>
-          <RoomProvider>
-            <div className="app">
-              <Navigation />
-              <main className="app-content">
-                <Routes>
-                  <Route path="/" element={<Home />} />
-                  <Route path="/auth" element={<Auth />} />
-                  <Route path="/rooms" element={<Rooms />} />
-                  <Route path="/rooms/create" element={<CreateRoom />} />
-                  <Route path="/rooms/:roomId" element={<RoomDetail />} />
-                  <Route path="/recording" element={<Recording />} />
-                  <Route path="/mix" element={<MixLab />} />
-                  <Route path="/community" element={<Community />} />
-                  <Route path="/community/create" element={<CreatePost />} />
-                  <Route path="/community/:postId" element={<PostDetail />} />
-                  <Route path="/settings/audio" element={<AudioSettingsPage />} />
-                </Routes>
-              </main>
-              <footer className="app-footer">
-                <p>BandSpace · Syncroom-inspired 데모. 데스크톱 / 모바일 확장을 준비 중입니다.</p>
-              </footer>
-            </div>
-          </RoomProvider>
-        </AudioSettingsProvider>
-
+        <PremiumProvider>
+          <AudioSettingsProvider>
+            <RoomProvider>
+              <AppContent />
+            </RoomProvider>
+          </AudioSettingsProvider>
+        </PremiumProvider>
       </AuthProvider>
     </BrowserRouter>
   )
