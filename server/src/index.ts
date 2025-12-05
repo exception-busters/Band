@@ -341,15 +341,8 @@ wss.on('connection', (ws) => {
 			// 연주 참여 요청 (관람자 -> 방장)
 			if (msg.type === 'request-perform' && client.roomId && msg.instrument) {
 				const roomId = client.roomId;
-				const host = findRoomHost(roomId);
 
-				if (!host) {
-					console.log(`[REQUEST-PERFORM] No host found for room ${roomId.slice(0, 8)}`);
-					send(ws, { type: 'request-perform-error', message: '방장을 찾을 수 없습니다.' });
-					return;
-				}
-
-				// 요청 저장
+				// 요청 저장 (방장 유무와 관계없이)
 				if (!performRequests.has(roomId)) {
 					performRequests.set(roomId, []);
 				}
@@ -372,13 +365,18 @@ wss.on('connection', (ws) => {
 
 				console.log(`[REQUEST-PERFORM] ${id.slice(0, 8)} (${client.nickname}) requested to perform: ${msg.instrument}`);
 
-				// 방장에게 요청 알림
-				send(host.ws, {
-					type: 'perform-request-received',
-					request
-				});
+				// 방장에게 요청 알림 (방장이 있는 경우)
+				const host = findRoomHost(roomId);
+				if (host) {
+					send(host.ws, {
+						type: 'perform-request-received',
+						request
+					});
+				} else {
+					console.log(`[REQUEST-PERFORM] Host not in room, request queued for later`);
+				}
 
-				// 요청자에게 확인
+				// 요청자에게 확인 (방장 유무와 관계없이 pending 상태)
 				send(ws, {
 					type: 'perform-request-sent',
 					instrument: msg.instrument
