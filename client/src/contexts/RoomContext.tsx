@@ -144,6 +144,13 @@ type RoomContextType = {
   startRecording: () => void
   stopRecording: () => void
   deleteRecording: (id: string) => void
+
+  // 미니 플레이어 모드
+  isMiniPlayerMode: boolean
+  enterMiniPlayerMode: () => void
+  exitMiniPlayerMode: () => void
+  returnToRoom: () => string | null
+  clearMiniPlayerMode: () => void
 }
 
 const RoomContext = createContext<RoomContextType | null>(null)
@@ -181,6 +188,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     panner: StereoPannerNode
     analyser: AnalyserNode
   }>>(new Map())
+
+  // 미니 플레이어 모드 ref (unregisterAudioStream에서 사용)
+  const isMiniPlayerModeRef = useRef(false)
 
   // 공유 AudioContext (한 번만 생성)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -257,7 +267,13 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // 오디오 노드 해제 - useCallback으로 안정적인 참조 유지
+  // 미니 플레이어 모드일 때는 오디오 노드를 유지하여 소리가 계속 들리도록 함
   const unregisterAudioStream = useCallback((peerId: string) => {
+    // 미니 플레이어 모드면 오디오 노드 유지 (ref 사용)
+    if (isMiniPlayerModeRef.current) {
+      console.log('[AUDIO] Mini player mode - keeping audio nodes:', peerId.slice(0, 8))
+      return
+    }
     const nodes = audioNodesRef.current.get(peerId)
     if (nodes) {
       nodes.source.disconnect()
@@ -374,6 +390,11 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const recordingStartTimeRef = useRef<number>(0)
   const recordingTimerRef = useRef<number | null>(null)
   const recordingMimeTypeRef = useRef<string>('')
+
+  // 미니 플레이어 모드 상태
+  const [isMiniPlayerMode, setIsMiniPlayerMode] = useState(false)
+  // 미니 플레이어에서 방으로 돌아가는 중인지 (cleanup에서 다시 미니 모드로 전환 방지)
+  const isReturningToRoomRef = useRef(false)
 
   const wsRef = useRef<WebSocket | null>(null)
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map())
@@ -828,6 +849,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     setRecordingDuration(0)
     // 녹음 destination 해제
     recordingDestinationRef.current = null
+    // 미니 플레이어 모드 해제
+    isMiniPlayerModeRef.current = false
+    setIsMiniPlayerMode(false)
   }
 
   // 기본 믹서 설정
@@ -1163,6 +1187,57 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       return prev.filter(r => r.id !== id)
     })
     console.log('[RECORDING] Deleted recording:', id)
+  }
+
+  // === 미니 플레이어 모드 함수 ===
+
+  // 미니 플레이어 모드로 전환 (RoomDetail 페이지를 떠날 때 호출)
+  const enterMiniPlayerMode = () => {
+    // 방으로 돌아가는 중이면 미니 플레이어 모드로 전환하지 않음
+    if (isReturningToRoomRef.current) {
+      console.log('[MINI] Skipping enter mini player mode - returning to room')
+      isReturningToRoomRef.current = false
+      return
+    }
+    if (!currentRoomId) {
+      console.log('[MINI] Cannot enter mini player mode - not in a room')
+      return
+    }
+    console.log('[MINI] Entering mini player mode, room:', currentRoomId.slice(0, 8))
+    isMiniPlayerModeRef.current = true
+    setIsMiniPlayerMode(true)
+  }
+
+  // 미니 플레이어 모드 종료 및 방 나가기
+  const exitMiniPlayerMode = () => {
+    console.log('[MINI] Exiting mini player mode and leaving room')
+    isMiniPlayerModeRef.current = false
+    setIsMiniPlayerMode(false)
+    leaveRoom()
+  }
+
+  // 미니 플레이어에서 방으로 돌아가기 (현재 방 ID 반환)
+  const returnToRoom = (): string | null => {
+    if (!currentRoomId) {
+      console.log('[MINI] Cannot return to room - no current room')
+      return null
+    }
+    console.log('[MINI] Returning to room:', currentRoomId.slice(0, 8))
+    // cleanup에서 다시 미니 모드로 전환되지 않도록 플래그 설정
+    isReturningToRoomRef.current = true
+    isMiniPlayerModeRef.current = false
+    setIsMiniPlayerMode(false)
+    return currentRoomId
+  }
+
+  // 미니 플레이어 모드만 해제 (방은 유지)
+  const clearMiniPlayerMode = () => {
+    if (isMiniPlayerMode) {
+      console.log('[MINI] Clearing mini player mode')
+      isReturningToRoomRef.current = true
+      isMiniPlayerModeRef.current = false
+      setIsMiniPlayerMode(false)
+    }
   }
 
   // 요청 승인 (방장)
@@ -1718,6 +1793,12 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         startRecording,
         stopRecording,
         deleteRecording,
+        // 미니 플레이어 모드
+        isMiniPlayerMode,
+        enterMiniPlayerMode,
+        exitMiniPlayerMode,
+        returnToRoom,
+        clearMiniPlayerMode,
       }}
     >
       {children}

@@ -164,6 +164,10 @@ export function RoomDetail() {
     startRecording,
     stopRecording,
     deleteRecording,
+    // 미니 플레이어 모드
+    enterMiniPlayerMode,
+    clearMiniPlayerMode,
+    currentRoomId: contextRoomId,
   } = useRoom()
 
   // 네트워크 품질 아이콘
@@ -177,7 +181,8 @@ export function RoomDetail() {
 
   const [room, setRoom] = useState<Room | null>(null)
   const [loading, setLoading] = useState(true)
-  const [isPerformer, setIsPerformer] = useState(false)
+  // 연주자 상태: localStream과 myInstrument가 있으면 연주자로 초기화 (미니 플레이어에서 돌아올 때)
+  const [isPerformer, setIsPerformer] = useState(() => !!(localStream && myInstrument))
   const [showPendingRequests, setShowPendingRequests] = useState(false)
   const [showRoomInfo, setShowRoomInfo] = useState(false)
   const [showInstrumentSelect, setShowInstrumentSelect] = useState(false)
@@ -271,10 +276,34 @@ export function RoomDetail() {
     fetchHostNickname()
   }, [room?.host_id])
 
+  // clearMiniPlayerMode를 ref로 저장 (의존성 문제 방지)
+  const clearMiniPlayerModeRef = useRef(clearMiniPlayerMode)
+  useEffect(() => {
+    clearMiniPlayerModeRef.current = clearMiniPlayerMode
+  }, [clearMiniPlayerMode])
+
   // 방 입장 시 자동으로 joinRoom 호출
   useEffect(() => {
     // 인증 로딩이 완료될 때까지 대기 (isHost 정확히 계산하기 위해)
     if (authLoading) return
+
+    // 이미 같은 방에 연결되어 있으면 (미니 플레이어에서 돌아온 경우 등) joinRoom 불필요
+    if (contextRoomId === roomId) {
+      if (!hasJoinedRef.current) {
+        console.log('[ROOM] Already connected to this room, skipping joinRoom')
+        hasJoinedRef.current = true
+        // 미니 플레이어 모드 해제
+        clearMiniPlayerModeRef.current()
+      }
+      return
+    }
+
+    // 다른 방에 연결되어 있으면 먼저 나가기 (미니 플레이어 모드도 해제됨)
+    if (contextRoomId && contextRoomId !== roomId) {
+      console.log('[ROOM] Connected to different room, leaving first:', contextRoomId.slice(0, 8))
+      leaveRoom()
+      hasJoinedRef.current = false
+    }
 
     if (room && roomId && signalStatus === 'connected' && !hasJoinedRef.current) {
       hasJoinedRef.current = true
@@ -284,25 +313,27 @@ export function RoomDetail() {
       console.log('[ROOM] Joining room with isHost:', hostFlag, 'user:', user?.id, 'host_id:', room.host_id)
       // 참여자 수 동기화는 room-state 수신 후 peers 변경 시 자동으로 처리됨
     }
-  }, [room, roomId, signalStatus, authLoading, user, joinRoom])
+  }, [room, roomId, signalStatus, authLoading, user, joinRoom, leaveRoom, contextRoomId])
 
-  // leaveRoom을 ref로 저장 (의존성 문제 방지)
+  // 함수들을 ref로 저장 (의존성 문제 방지)
   const leaveRoomRef = useRef(leaveRoom)
+  const enterMiniPlayerModeRef = useRef(enterMiniPlayerMode)
   useEffect(() => {
     leaveRoomRef.current = leaveRoom
-  }, [leaveRoom])
+    enterMiniPlayerModeRef.current = enterMiniPlayerMode
+  }, [leaveRoom, enterMiniPlayerMode])
 
-  // 페이지 이탈 시 cleanup (참여자 수는 서버에서 관리)
+  // 페이지 이탈 시 cleanup - 미니 플레이어 모드로 전환 (방에서 완전히 나가지 않음)
   useEffect(() => {
     if (!roomId) return
 
     // cleanup: 컴포넌트 언마운트 시
     return () => {
       if (hasJoinedRef.current) {
-        hasJoinedRef.current = false
-        console.log('[CLEANUP] Left room:', roomId.slice(0, 8))
-        // 서버에 leave 메시지 전송 -> 서버가 DB 참여자 수 업데이트
-        leaveRoomRef.current()
+        // hasJoinedRef는 유지 (미니 플레이어에서 돌아올 때 재사용)
+        console.log('[CLEANUP] Page leaving, entering mini player mode:', roomId.slice(0, 8))
+        // leaveRoom 대신 미니 플레이어 모드로 전환
+        enterMiniPlayerModeRef.current()
       }
     }
   }, [roomId])
