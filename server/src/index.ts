@@ -14,6 +14,18 @@ const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabase
 
 if (supabase) {
 	console.log('[DB] Supabase client initialized - participant sync enabled');
+	// 서버 시작 시 모든 방의 참여자 수를 0으로 초기화
+	supabase
+		.from('rooms')
+		.update({ current_participants: 0 })
+		.gt('current_participants', 0)
+		.then(({ error }) => {
+			if (error) {
+				console.error('[DB] Failed to reset participants:', error.message);
+			} else {
+				console.log('[DB] All room participants reset to 0');
+			}
+		});
 } else {
 	console.log('[DB] Supabase not configured - participant sync disabled');
 	console.log('[DB] Set SUPABASE_URL and SUPABASE_SERVICE_KEY to enable');
@@ -218,29 +230,32 @@ wss.on('connection', (ws) => {
 						}
 					}
 				}
-				console.log(`[JOIN-DEBUG] Client ${id.slice(0, 8)} joining with isHost: ${msg.isHost} (type: ${typeof msg.isHost}), stored: ${client.isHost}, userId: ${client.userId?.slice(0, 8) || 'none'}`);
+				const isRejoin = msg.isRejoin === true;
+				console.log(`[JOIN-DEBUG] Client ${id.slice(0, 8)} joining with isHost: ${msg.isHost} (type: ${typeof msg.isHost}), stored: ${client.isHost}, userId: ${client.userId?.slice(0, 8) || 'none'}, isRejoin: ${isRejoin}`);
 
 				client.roomId = msg.roomId;
 				if (!rooms.has(msg.roomId)) rooms.set(msg.roomId, new Set());
 				rooms.get(msg.roomId)!.add(id);
 
 				const participants = getRoomParticipants(msg.roomId);
-				console.log(`[JOIN] Client ${id.slice(0, 8)} (${client.nickname}) joined room ${msg.roomId.slice(0, 8)}. Room size: ${participants.length}${client.isHost ? ' [HOST]' : ''}`);
+				console.log(`[${isRejoin ? 'REJOIN' : 'JOIN'}] Client ${id.slice(0, 8)} (${client.nickname}) joined room ${msg.roomId.slice(0, 8)}. Room size: ${participants.length}${client.isHost ? ' [HOST]' : ''}`);
 
 				// DB 참여자 수 업데이트
 				updateRoomParticipants(msg.roomId);
 
-				// 기존 피어들에게 새 참여자 알림
-				broadcastToRoom(msg.roomId, id, {
-					type: 'participant-joined',
-					participant: {
-						oderId: id,
-						nickname: client.nickname,
-						instrument: client.instrument,
-						isPerforming: client.isPerforming,
-						isHost: client.isHost
-					}
-				});
+				// 기존 피어들에게 새 참여자 알림 (rejoin이 아닌 경우에만)
+				if (!isRejoin) {
+					broadcastToRoom(msg.roomId, id, {
+						type: 'participant-joined',
+						participant: {
+							oderId: id,
+							nickname: client.nickname,
+							instrument: client.instrument,
+							isPerforming: client.isPerforming,
+							isHost: client.isHost
+						}
+					});
+				}
 
 				// 새 참여자에게 현재 방 상태 전송
 				send(ws, {

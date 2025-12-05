@@ -387,6 +387,10 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const clientIdRef = useRef<string | null>(null)
   const peersRef = useRef<string[]>([])
 
+  // 재연결용 ref (WebSocket 끊어졌을 때 다시 join하기 위한 정보)
+  const currentRoomIdRef = useRef<string | null>(null)
+  const isHostRef = useRef<boolean>(false)
+
   const sendSignalMessage = (payload: Record<string, unknown>) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(payload))
@@ -774,6 +778,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       userId: user?.id || null
     }))
     setCurrentRoomId(roomId)
+    // 재연결용 ref 업데이트
+    currentRoomIdRef.current = roomId
+    isHostRef.current = isHost || false
     setJoinFeedback('룸 입장 시도 중...')
   }
 
@@ -784,6 +791,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     stopLocalMic(false) // 이미 leave로 알렸으므로 중복 알림 방지
     setPeers([])
     setCurrentRoomId(null)
+    // 재연결용 ref 초기화 (의도적으로 나간 경우 재연결 안 함)
+    currentRoomIdRef.current = null
+    isHostRef.current = false
     setJoinFeedback('')
     setChatMessages([])
     // 오디오 노드 정리
@@ -1203,38 +1213,72 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
     // StrictMode double-mount 방지용 플래그
     let isMounted = true
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
+    let reconnectAttempts = 0
 
-    console.log('[WS] Connecting to', SIGNALING_URL)
-    setSignalStatus('connecting')
-    const ws = new WebSocket(SIGNALING_URL)
-    wsRef.current = ws
+    const connect = () => {
+      console.log('[WS] Connecting to', SIGNALING_URL)
+      setSignalStatus('connecting')
+      const ws = new WebSocket(SIGNALING_URL)
+      wsRef.current = ws
 
-    ws.onopen = () => {
-      console.log('[WS] Connected!')
-      if (isMounted) setSignalStatus('connected')
-    }
-    ws.onerror = (event) => {
-      console.error('[WS] Error:', event)
-      if (!isMounted) return
-      setSignalStatus('error')
-    }
-    ws.onclose = (event) => {
-      console.log('[WS] Closed:', event.code, event.reason)
-      if (!isMounted) return
-      setSignalStatus('idle')
-      setClientId(null)
-      setPeers([])
-      teardownPeerConnections()
-    }
-    ws.onmessage = (event) => {
-      if (!isMounted) return
-      try {
-        const payload = JSON.parse(event.data)
-        if (payload.type === 'welcome') {
-          setClientId(payload.clientId)
-          clientIdRef.current = payload.clientId
-          return
+      ws.onopen = () => {
+        console.log('[WS] Connected!')
+        if (isMounted) setSignalStatus('connected')
+        reconnectAttempts = 0 // 연결 성공 시 재연결 시도 횟수 리셋
+      }
+      ws.onerror = (event) => {
+        console.error('[WS] Error:', event)
+        if (!isMounted) return
+        setSignalStatus('error')
+      }
+      ws.onclose = (event) => {
+        console.log('[WS] Closed:', event.code, event.reason)
+        if (!isMounted) return
+        setSignalStatus('idle')
+        setClientId(null)
+        setPeers([])
+        teardownPeerConnections()
+
+        // 방에 입장 중이었고, 정상적인 종료가 아닌 경우에만 재연결 시도
+        // code 1000 = 정상 종료, 1005 = 정상 종료 (no status), 그 외 = 비정상
+        const shouldReconnect = currentRoomIdRef.current && event.code !== 1000 && event.code !== 1005
+        if (shouldReconnect && reconnectAttempts < 3) {
+          reconnectAttempts++
+          console.log(`[WS] Was in room, attempting reconnect ${reconnectAttempts}/3 in 2s...`)
+          reconnectTimeout = setTimeout(() => {
+            if (isMounted && currentRoomIdRef.current) {
+              connect()
+            }
+          }, 2000)
+        } else if (reconnectAttempts >= 3) {
+          console.log('[WS] Max reconnect attempts reached, giving up')
+          currentRoomIdRef.current = null
+          isHostRef.current = false
         }
+      }
+      ws.onmessage = (event) => {
+        if (!isMounted) return
+        try {
+          const payload = JSON.parse(event.data)
+          if (payload.type === 'welcome') {
+            setClientId(payload.clientId)
+            clientIdRef.current = payload.clientId
+
+            // 재연결 후 이전 방에 자동으로 다시 join
+            if (currentRoomIdRef.current) {
+              console.log('[WS] Reconnected, rejoining room:', currentRoomIdRef.current.slice(0, 8))
+              ws.send(JSON.stringify({
+                type: 'join',
+                roomId: currentRoomIdRef.current,
+                nickname: nicknameRef.current,
+                isHost: isHostRef.current,
+                userId: user?.id || null,
+                isRejoin: true
+              }))
+            }
+            return
+          }
         // 새로운 서버 메시지: 방 상태 (입장 시 수신)
         if (payload.type === 'room-state') {
           const peerList: string[] = Array.isArray(payload.peerIds) ? payload.peerIds : []
@@ -1471,19 +1515,29 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           setMyRequestStatus('rejected')
           return
         }
-      } catch {
-        // ignore malformed payloads
+        } catch {
+          // ignore malformed payloads
+        }
       }
     }
 
+    // 초기 연결
+    connect()
+
     return () => {
       isMounted = false
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
+      }
       // 연결이 완전히 열린 경우에만 close
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close()
-      } else if (ws.readyState === WebSocket.CONNECTING) {
-        // 연결 중이면 열리자마자 닫기
-        ws.onopen = () => ws.close()
+      const ws = wsRef.current
+      if (ws) {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close()
+        } else if (ws.readyState === WebSocket.CONNECTING) {
+          // 연결 중이면 열리자마자 닫기
+          ws.onopen = () => ws.close()
+        }
       }
     }
   }, [])
