@@ -3587,6 +3587,7 @@ body {
   gap: 1px;
   flex: 1;
   background: var(--border);
+  overflow: visible;
 }
 
 /* Performers Panel (Left) */
@@ -3843,8 +3844,18 @@ body {
   left: calc(100% + 8px);
   top: 50%;
   transform: translateY(-50%);
-  z-index: 100;
+  z-index: 9999;
   animation: bubble-pop 0.3s ease-out;
+}
+
+/* Fixed position 말풍선 (믹서 위에 표시, 네비게이션보다는 아래) */
+.instrument-change-bubble.fixed {
+  position: fixed;
+  left: auto;
+  top: auto;
+  transform: translateY(-50%);
+  z-index: 50;
+  pointer-events: auto;
 }
 
 @keyframes bubble-pop {
@@ -3860,14 +3871,27 @@ body {
 
 .bubble-arrow {
   position: absolute;
-  left: -6px;
+  left: -7px;
   top: 50%;
   transform: translateY(-50%);
   width: 0;
   height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-right: 7px solid rgba(141, 123, 255, 0.6);
+}
+
+/* 배경색 안쪽 삼각형 */
+.bubble-arrow::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: -6px;
+  width: 0;
+  height: 0;
   border-top: 6px solid transparent;
   border-bottom: 6px solid transparent;
-  border-right: 6px solid rgba(250, 204, 21, 0.95);
+  border-right: 6px solid rgba(18, 22, 45, 0.95);
 }
 
 .bubble-content {
@@ -3875,16 +3899,18 @@ body {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: rgba(250, 204, 21, 0.95);
+  background: rgba(18, 22, 45, 0.95);
+  border: 1px solid rgba(141, 123, 255, 0.6);
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   white-space: nowrap;
+  color: #fff;
 }
 
 .bubble-text {
   font-size: 0.75rem;
   font-weight: 500;
-  color: #1a1a2e;
+  color: #fff;
 }
 
 .bubble-actions {

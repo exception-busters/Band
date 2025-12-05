@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, memo } from 'react'
+import { useEffect, useState, useRef, memo, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useRoom } from '../contexts/RoomContext'
@@ -202,6 +202,54 @@ export function RoomDetail() {
   const localPreviewRef = useRef<HTMLAudioElement | null>(null)
   const chatContainerRef = useRef<HTMLDivElement | null>(null)
   const hasJoinedRef = useRef(false)
+  // 악기 변경 말풍선 위치 계산을 위한 refs
+  const performerRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const performersListRef = useRef<HTMLDivElement | null>(null)
+  const [bubblePositions, setBubblePositions] = useState<Record<string, { top: number; left: number }>>({})
+
+  // 말풍선 위치 업데이트 함수
+  const updateBubblePositions = useCallback(() => {
+    const newPositions: Record<string, { top: number; left: number }> = {}
+    pendingInstrumentChanges.forEach(request => {
+      const el = performerRefs.current[request.oderId]
+      if (el) {
+        const rect = el.getBoundingClientRect()
+        newPositions[request.oderId] = {
+          top: rect.top + rect.height / 2,
+          left: rect.right + 8
+        }
+      }
+    })
+    setBubblePositions(newPositions)
+  }, [pendingInstrumentChanges])
+
+  // 스크롤/리사이즈 시 말풍선 위치 업데이트
+  useEffect(() => {
+    if (pendingInstrumentChanges.length === 0) return
+
+    updateBubblePositions()
+
+    const performersList = performersListRef.current
+
+    // 스크롤 이벤트 핸들러
+    const handleScroll = () => {
+      requestAnimationFrame(updateBubblePositions)
+    }
+    const handleResize = () => {
+      requestAnimationFrame(updateBubblePositions)
+    }
+
+    // performers-list 스크롤 이벤트 리스너
+    performersList?.addEventListener('scroll', handleScroll, { passive: true })
+    window.addEventListener('resize', handleResize)
+    window.addEventListener('scroll', handleScroll, { passive: true })
+
+    return () => {
+      performersList?.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('scroll', handleScroll)
+    }
+  }, [pendingInstrumentChanges, updateBubblePositions])
 
   // 방 설정 폼 상태
   const [editTitle, setEditTitle] = useState('')
@@ -1176,7 +1224,7 @@ export function RoomDetail() {
             <span className="performer-count">{performerCount}명</span>
           </div>
 
-          <div className="performers-list">
+          <div className="performers-list" ref={performersListRef}>
             {/* 내 오디오 (연주자일 경우) */}
             {isPerformer && myInstrument && (
               <div className={`performer-item me ${localStream ? 'active' : 'muted'}`}>
@@ -1234,11 +1282,13 @@ export function RoomDetail() {
               const netStats = peerNetworkStats[oderId]
               const qualityInfo = QUALITY_ICONS[netStats?.quality || 'unknown']
               const hasAudioStream = remoteAudioMap[oderId] !== undefined
-              // 이 연주자의 악기 변경 요청 확인
-              const instrumentChangeRequest = pendingInstrumentChanges.find(r => r.oderId === oderId)
 
               return (
-                <div key={oderId} className="performer-item-wrapper">
+                <div
+                  key={oderId}
+                  className="performer-item-wrapper"
+                  ref={(el) => { performerRefs.current[oderId] = el }}
+                >
                   <div className={`performer-item ${hasAudioStream ? 'active' : 'connecting'}`}>
                     <div className="performer-avatar">
                       {peerInfo.isHost && <span className="host-crown">👑</span>}
@@ -1268,33 +1318,6 @@ export function RoomDetail() {
                       />
                     )}
                   </div>
-                  {/* 방장에게 악기 변경 요청 말풍선 */}
-                  {isHost && instrumentChangeRequest && (
-                    <div className="instrument-change-bubble">
-                      <div className="bubble-arrow" />
-                      <div className="bubble-content">
-                        <span className="bubble-text">
-                          🔄 {INSTRUMENT_INFO[instrumentChangeRequest.newInstrument]?.icon} {INSTRUMENT_INFO[instrumentChangeRequest.newInstrument]?.name || instrumentChangeRequest.newInstrument}
-                        </span>
-                        <div className="bubble-actions">
-                          <button
-                            onClick={() => approveInstrumentChange(oderId)}
-                            className="bubble-btn approve"
-                            title="승인"
-                          >
-                            ✓
-                          </button>
-                          <button
-                            onClick={() => rejectInstrumentChange(oderId)}
-                            className="bubble-btn reject"
-                            title="거절"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )
             })}
@@ -1595,6 +1618,46 @@ export function RoomDetail() {
           </form>
         </aside>
       </div>
+
+      {/* 악기 변경 요청 말풍선들 (fixed position으로 믹서 위에 표시) */}
+      {isHost && pendingInstrumentChanges.map(request => {
+        const pos = bubblePositions[request.oderId]
+        if (!pos) return null
+
+        return (
+          <div
+            key={request.oderId}
+            className="instrument-change-bubble fixed"
+            style={{
+              top: pos.top,
+              left: pos.left
+            }}
+          >
+            <div className="bubble-arrow" />
+            <div className="bubble-content">
+              <span className="bubble-text">
+                🔄 {INSTRUMENT_INFO[request.newInstrument]?.icon} {INSTRUMENT_INFO[request.newInstrument]?.name || request.newInstrument}
+              </span>
+              <div className="bubble-actions">
+                <button
+                  onClick={() => approveInstrumentChange(request.oderId)}
+                  className="bubble-btn approve"
+                  title="승인"
+                >
+                  ✓
+                </button>
+                <button
+                  onClick={() => rejectInstrumentChange(request.oderId)}
+                  className="bubble-btn reject"
+                  title="거절"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
