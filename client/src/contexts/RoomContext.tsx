@@ -1692,7 +1692,23 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         if (payload.type === 'instrument-change-approved') {
           console.log('[INSTRUMENT-CHANGE] Approved! New instrument:', payload.newInstrument)
           setMyInstrumentChangeStatus('approved')
-          setMyInstrument(payload.newInstrument)
+          // 악기만 업데이트 (start-performing을 다시 보내지 않음)
+          setMyInstrumentState(payload.newInstrument)
+          myInstrumentRef.current = payload.newInstrument
+          // 내 peerInstruments도 업데이트 (닉네임과 isHost 유지)
+          const myId = clientIdRef.current
+          if (myId) {
+            setPeerInstruments(prev => {
+              if (!prev[myId]) return prev
+              return {
+                ...prev,
+                [myId]: {
+                  ...prev[myId],
+                  instrument: payload.newInstrument
+                }
+              }
+            })
+          }
           // 상태 초기화
           setTimeout(() => {
             setMyInstrumentChangeStatus('none')
