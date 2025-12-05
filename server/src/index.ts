@@ -231,7 +231,6 @@ wss.on('connection', (ws) => {
 					}
 				}
 				const isRejoin = msg.isRejoin === true;
-				console.log(`[JOIN-DEBUG] Client ${id.slice(0, 8)} joining with isHost: ${msg.isHost} (type: ${typeof msg.isHost}), stored: ${client.isHost}, userId: ${client.userId?.slice(0, 8) || 'none'}, isRejoin: ${isRejoin}`);
 
 				client.roomId = msg.roomId;
 				if (!rooms.has(msg.roomId)) rooms.set(msg.roomId, new Set());

@@ -1227,8 +1227,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         if (isMounted) setSignalStatus('connected')
         reconnectAttempts = 0 // 연결 성공 시 재연결 시도 횟수 리셋
       }
-      ws.onerror = (event) => {
-        console.error('[WS] Error:', event)
+      ws.onerror = () => {
+        console.error('[WS] Connection error')
         if (!isMounted) return
         setSignalStatus('error')
       }
