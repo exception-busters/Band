@@ -1,13 +1,9 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-<<<<<<< HEAD
-import { AudioSettings } from './AudioSettings'
-=======
 import { usePremium } from '../contexts/PremiumContext'
 import { AudioSettings } from './AudioSettings'
 import { PlanStatus } from './PlanStatus'
->>>>>>> origin/yujin
 
 export function Navigation() {
   const { user, signOut } = useAuth()
