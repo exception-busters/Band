@@ -153,6 +153,12 @@ export function AudioSettingsProvider({ children }: { children: ReactNode }) {
 
   // 권한 요청
   const requestPermission = useCallback(async (): Promise<boolean> => {
+    // mediaDevices API 지원 여부 확인
+    if (!navigator.mediaDevices) {
+      console.warn('MediaDevices API not available. This requires HTTPS or localhost.')
+      return false
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       stream.getTracks().forEach(track => track.stop())
@@ -167,6 +173,12 @@ export function AudioSettingsProvider({ children }: { children: ReactNode }) {
 
   // 장치 목록 가져오기
   const refreshDevices = useCallback(async () => {
+    // mediaDevices API 지원 여부 확인
+    if (!navigator.mediaDevices) {
+      console.warn('MediaDevices API not available')
+      return
+    }
+
     try {
       const devices = await navigator.mediaDevices.enumerateDevices()
 
@@ -205,6 +217,13 @@ export function AudioSettingsProvider({ children }: { children: ReactNode }) {
 
   // 초기화: 권한 확인 후 장치 목록 로드
   useEffect(() => {
+    // mediaDevices API 지원 여부 확인 (HTTPS 또는 localhost에서만 사용 가능)
+    if (!navigator.mediaDevices) {
+      console.warn('MediaDevices API not available. This requires HTTPS or localhost.')
+      setIsInitialized(true)
+      return
+    }
+
     const init = async () => {
       // 권한 상태 확인
       try {

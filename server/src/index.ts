@@ -1,7 +1,35 @@
 import { WebSocketServer } from 'ws';
+import { createServer } from 'https';
+import { readFileSync, existsSync } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import paymentRoutes from './routes/payment';
+
+// 환경변수 로드
+dotenv.config();
 
 const PORT = Number(process.env.PORT || 8080);
+const HTTP_PORT = Number(process.env.HTTP_PORT || 3001);
+
+// Express 앱 설정
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// 결제 API 라우트
+app.use('/api/payment', paymentRoutes);
+
+// 기본 라우트
+app.get('/', (req, res) => {
+  res.json({ message: 'BandSpace API Server', version: '1.0.0' });
+});
+
+// HTTP 서버 시작
+app.listen(HTTP_PORT, () => {
+  console.log(`HTTP API server listening on http://localhost:${HTTP_PORT}`);
+});
 
 // 클라이언트 정보 (연주 상태 포함)
 interface Client {
@@ -31,7 +59,35 @@ interface PerformRequest {
 	timestamp: number;
 }
 
-const wss = new WebSocketServer({ port: PORT });
+// HTTPS 서버 설정 (자체 서명 인증서 사용)
+let wss: WebSocketServer;
+
+const certPath = './certs/cert.pem';
+const keyPath = './certs/key.pem';
+
+if (existsSync(certPath) && existsSync(keyPath)) {
+	// WSS (Secure WebSocket) 모드
+	const server = createServer(
+		{
+			cert: readFileSync(certPath),
+			key: readFileSync(keyPath),
+		},
+		(req, res) => {
+			// 브라우저에서 직접 접속 시 인증서 수락용 응답
+			res.writeHead(200, { 'Content-Type': 'text/plain' });
+			res.end('WSS Signaling Server is running. Certificate accepted!');
+		}
+	);
+	wss = new WebSocketServer({ server });
+	server.listen(PORT, () => {
+		console.log(`WSS signaling server listening on wss://localhost:${PORT}`);
+	});
+} else {
+	// WS (일반 WebSocket) 모드 - 개발용
+	wss = new WebSocketServer({ port: PORT });
+	console.log(`WS signaling server listening on ws://localhost:${PORT}`);
+	console.log('For WSS, create certs/cert.pem and certs/key.pem');
+}
 const rooms = new Map<string, Set<string>>(); // roomId -> clientIds
 const clients = new Map<string, Client>(); // clientId -> client
 const performRequests = new Map<string, PerformRequest[]>(); // roomId -> pending requests
@@ -428,5 +484,3 @@ wss.on('connection', (ws) => {
 		clients.delete(id);
 	});
 });
-
-console.log(`WS signaling server listening on ws://localhost:${PORT}`);
