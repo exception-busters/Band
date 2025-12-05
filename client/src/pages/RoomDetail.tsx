@@ -1238,57 +1238,62 @@ export function RoomDetail() {
               const instrumentChangeRequest = pendingInstrumentChanges.find(r => r.oderId === oderId)
 
               return (
-                <div key={oderId} className={`performer-item ${hasAudioStream ? 'active' : 'connecting'}`}>
-                  <div className="performer-avatar">
-                    {peerInfo.isHost && <span className="host-crown">👑</span>}
-                    <div className="avatar-circle">
-                      <span>{instInfo.icon}</span>
+                <div key={oderId} className="performer-item-wrapper">
+                  <div className={`performer-item ${hasAudioStream ? 'active' : 'connecting'}`}>
+                    <div className="performer-avatar">
+                      {peerInfo.isHost && <span className="host-crown">👑</span>}
+                      <div className="avatar-circle">
+                        <span>{instInfo.icon}</span>
+                      </div>
+                      {hasAudioStream && <span className="live-indicator" />}
                     </div>
-                    {hasAudioStream && <span className="live-indicator" />}
+                    <div className="performer-info">
+                      <span className="performer-name">{peerInfo.nickname || `연주자 ${oderId.slice(0, 4)}`} {peerInfo.isHost && '(방장)'}</span>
+                      <span className="performer-instrument">{instInfo.name}</span>
+                    </div>
+                    {/* 네트워크 상태 표시 */}
+                    <div className="performer-latency" title={`레이턴시: ${netStats?.latency ?? '?'}ms | 지터: ${netStats?.jitter ?? '?'}ms | 품질: ${qualityInfo.label}`}>
+                      <span className="latency-value" style={{ color: qualityInfo.color }}>
+                        {hasAudioStream ? (netStats?.latency != null ? `${netStats.latency}ms` : '--') : '연결 중'}
+                      </span>
+                      <span className="quality-indicator">{qualityInfo.icon}</span>
+                    </div>
+                    {/* 오디오 재생 */}
+                    {hasAudioStream && (
+                      <RemoteAudio
+                        oderId={oderId}
+                        stream={remoteAudioMap[oderId]}
+                        registerAudioStream={registerAudioStream}
+                        unregisterAudioStream={unregisterAudioStream}
+                      />
+                    )}
                   </div>
-                  <div className="performer-info">
-                    <span className="performer-name">{peerInfo.nickname || `연주자 ${oderId.slice(0, 4)}`} {peerInfo.isHost && '(방장)'}</span>
-                    <span className="performer-instrument">{instInfo.name}</span>
-                    {/* 방장에게 악기 변경 요청 표시 */}
-                    {isHost && instrumentChangeRequest && (
-                      <div className="instrument-change-request">
-                        <span className="change-request-text">
-                          🔄 {INSTRUMENT_INFO[instrumentChangeRequest.newInstrument]?.name || instrumentChangeRequest.newInstrument}(으)로 변경 요청
+                  {/* 방장에게 악기 변경 요청 말풍선 */}
+                  {isHost && instrumentChangeRequest && (
+                    <div className="instrument-change-bubble">
+                      <div className="bubble-arrow" />
+                      <div className="bubble-content">
+                        <span className="bubble-text">
+                          🔄 {INSTRUMENT_INFO[instrumentChangeRequest.newInstrument]?.icon} {INSTRUMENT_INFO[instrumentChangeRequest.newInstrument]?.name || instrumentChangeRequest.newInstrument}
                         </span>
-                        <div className="change-request-actions">
+                        <div className="bubble-actions">
                           <button
                             onClick={() => approveInstrumentChange(oderId)}
-                            className="approve-btn small"
+                            className="bubble-btn approve"
                             title="승인"
                           >
                             ✓
                           </button>
                           <button
                             onClick={() => rejectInstrumentChange(oderId)}
-                            className="reject-btn small"
+                            className="bubble-btn reject"
                             title="거절"
                           >
                             ✕
                           </button>
                         </div>
                       </div>
-                    )}
-                  </div>
-                  {/* 네트워크 상태 표시 */}
-                  <div className="performer-latency" title={`레이턴시: ${netStats?.latency ?? '?'}ms | 지터: ${netStats?.jitter ?? '?'}ms | 품질: ${qualityInfo.label}`}>
-                    <span className="latency-value" style={{ color: qualityInfo.color }}>
-                      {hasAudioStream ? (netStats?.latency != null ? `${netStats.latency}ms` : '--') : '연결 중'}
-                    </span>
-                    <span className="quality-indicator">{qualityInfo.icon}</span>
-                  </div>
-                  {/* 오디오 재생 */}
-                  {hasAudioStream && (
-                    <RemoteAudio
-                      oderId={oderId}
-                      stream={remoteAudioMap[oderId]}
-                      registerAudioStream={registerAudioStream}
-                      unregisterAudioStream={unregisterAudioStream}
-                    />
+                    </div>
                   )}
                 </div>
               )
@@ -1352,45 +1357,6 @@ export function RoomDetail() {
             <div className="pending-requests-alert" onClick={() => setShowPendingRequests(true)}>
               <span className="alert-badge">{pendingRequests.length}</span>
               <span>연주 참여 요청</span>
-            </div>
-          )}
-
-          {/* 방장: 악기 변경 요청 목록 */}
-          {isHost && pendingInstrumentChanges.length > 0 && (
-            <div className="instrument-change-requests-section">
-              <div className="section-header">
-                <span className="alert-badge">{pendingInstrumentChanges.length}</span>
-                <span>🔄 악기 변경 요청</span>
-              </div>
-              <div className="change-requests-list">
-                {pendingInstrumentChanges.map(request => (
-                  <div key={request.oderId} className="change-request-item">
-                    <div className="request-info">
-                      <span className="requester-name">{request.nickname}</span>
-                      <span className="change-detail">
-                        {INSTRUMENT_INFO[request.currentInstrument]?.icon || '🎵'} → {INSTRUMENT_INFO[request.newInstrument]?.icon || '🎵'}
-                        {INSTRUMENT_INFO[request.newInstrument]?.name || request.newInstrument}
-                      </span>
-                    </div>
-                    <div className="request-actions">
-                      <button
-                        onClick={() => approveInstrumentChange(request.oderId)}
-                        className="approve-btn"
-                        title="승인"
-                      >
-                        ✓
-                      </button>
-                      <button
-                        onClick={() => rejectInstrumentChange(request.oderId)}
-                        className="reject-btn"
-                        title="거절"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
           )}
         </aside>

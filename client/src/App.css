@@ -3832,94 +3832,97 @@ body {
   color: white;
 }
 
-/* 악기 변경 요청 섹션 (방장용) */
-.instrument-change-requests-section {
-  margin-top: 12px;
-  padding: 12px;
-  background: rgba(250, 204, 21, 0.1);
-  border: 1px solid rgba(250, 204, 21, 0.3);
-  border-radius: 12px;
+/* 연주자 아이템 래퍼 (말풍선 포지셔닝용) */
+.performer-item-wrapper {
+  position: relative;
 }
 
-.instrument-change-requests-section .section-header {
+/* 악기 변경 요청 말풍선 */
+.instrument-change-bubble {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 100;
+  animation: bubble-pop 0.3s ease-out;
+}
+
+@keyframes bubble-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+}
+
+.bubble-arrow {
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-right: 6px solid rgba(250, 204, 21, 0.95);
+}
+
+.bubble-content {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #facc15;
-  margin-bottom: 8px;
-}
-
-.change-requests-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.change-request-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
-  background: rgba(0, 0, 0, 0.2);
+  padding: 6px 10px;
+  background: rgba(250, 204, 21, 0.95);
   border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
 }
 
-.change-request-item .request-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.change-request-item .requester-name {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--text);
-}
-
-.change-request-item .change-detail {
+.bubble-text {
   font-size: 0.75rem;
-  color: var(--text-muted);
+  font-weight: 500;
+  color: #1a1a2e;
 }
 
-.change-request-item .request-actions {
+.bubble-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 
-.change-request-item .approve-btn,
-.change-request-item .reject-btn {
-  width: 28px;
-  height: 28px;
+.bubble-btn {
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   border: none;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.7rem;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
 }
 
-.change-request-item .approve-btn {
-  background: rgba(74, 222, 128, 0.2);
-  color: #4ade80;
+.bubble-btn.approve {
+  background: #4ade80;
+  color: #1a1a2e;
 }
 
-.change-request-item .approve-btn:hover {
-  background: rgba(74, 222, 128, 0.4);
-  transform: scale(1.1);
+.bubble-btn.approve:hover {
+  background: #22c55e;
+  transform: scale(1.15);
 }
 
-.change-request-item .reject-btn {
-  background: rgba(248, 113, 113, 0.2);
-  color: #f87171;
+.bubble-btn.reject {
+  background: #f87171;
+  color: #1a1a2e;
 }
 
-.change-request-item .reject-btn:hover {
-  background: rgba(248, 113, 113, 0.4);
-  transform: scale(1.1);
+.bubble-btn.reject:hover {
+  background: #ef4444;
+  transform: scale(1.15);
 }
 
 /* 레이턴시 표시 */
