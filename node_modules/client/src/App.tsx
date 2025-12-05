@@ -67,7 +67,6 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-<<<<<<< HEAD
         <AudioSettingsProvider>
           <RoomProvider>
             <div className="app">
@@ -93,15 +92,7 @@ function App() {
             </div>
           </RoomProvider>
         </AudioSettingsProvider>
-=======
-        <PremiumProvider>
-          <AudioSettingsProvider>
-            <RoomProvider>
-              <AppContent />
-            </RoomProvider>
-          </AudioSettingsProvider>
-        </PremiumProvider>
->>>>>>> origin/yujin
+
       </AuthProvider>
     </BrowserRouter>
   )
