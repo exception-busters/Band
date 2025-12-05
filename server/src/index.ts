@@ -493,10 +493,10 @@ wss.on('connection', (ws) => {
 	});
 
 	ws.on('close', () => {
-		console.log(`[DISCONNECT] Client ${id.slice(0, 8)} disconnected. Total clients: ${clients.size - 1}`);
+		const roomId = client.roomId; // close 시점에 roomId 먼저 저장
+		console.log(`[DISCONNECT] Client ${id.slice(0, 8)} disconnected. roomId: ${roomId?.slice(0, 8) || 'none'}. Total clients: ${clients.size - 1}`);
 
-		if (client.roomId && rooms.has(client.roomId)) {
-			const roomId = client.roomId;
+		if (roomId && rooms.has(roomId)) {
 			const set = rooms.get(roomId)!;
 			set.delete(id);
 			console.log(`[LEAVE] Client ${id.slice(0, 8)} left room. Room size: ${set.size}`);

@@ -286,6 +286,12 @@ export function RoomDetail() {
     }
   }, [room, roomId, signalStatus, authLoading, user, joinRoom])
 
+  // leaveRoom을 ref로 저장 (의존성 문제 방지)
+  const leaveRoomRef = useRef(leaveRoom)
+  useEffect(() => {
+    leaveRoomRef.current = leaveRoom
+  }, [leaveRoom])
+
   // 페이지 이탈 시 cleanup (참여자 수는 서버에서 관리)
   useEffect(() => {
     if (!roomId) return
@@ -295,7 +301,8 @@ export function RoomDetail() {
       if (hasJoinedRef.current) {
         hasJoinedRef.current = false
         console.log('[CLEANUP] Left room:', roomId.slice(0, 8))
-        // 참여자 수는 서버에서 WebSocket close 이벤트로 업데이트됨
+        // 서버에 leave 메시지 전송 -> 서버가 DB 참여자 수 업데이트
+        leaveRoomRef.current()
       }
     }
   }, [roomId])
