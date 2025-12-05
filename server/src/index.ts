@@ -262,6 +262,20 @@ wss.on('connection', (ws) => {
 					participants: participants.filter(p => p.oderId !== id),
 					peerIds: participants.filter(p => p.oderId !== id).map(p => p.oderId)
 				});
+
+				// 방장이 입장한 경우, 대기 중인 연주 요청들 전송
+				if (client.isHost) {
+					const pendingRequests = performRequests.get(msg.roomId) || [];
+					if (pendingRequests.length > 0) {
+						console.log(`[JOIN] Sending ${pendingRequests.length} pending requests to host`);
+						for (const request of pendingRequests) {
+							send(ws, {
+								type: 'perform-request-received',
+								request
+							});
+						}
+					}
+				}
 				return;
 			}
 
