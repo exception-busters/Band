@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -92,11 +92,10 @@ export function Auth() {
   }
 
   // 이미 로그인된 경우 홈으로 리다이렉트
-  useEffect(() => {
-    if (user) {
-      navigate('/', { replace: true })
-    }
-  }, [user, navigate])
+  if (user) {
+    navigate('/')
+    return null
+  }
 
   return (
     <div className="auth-page">

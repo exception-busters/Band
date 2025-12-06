@@ -1,37 +1,12 @@
-import { useState, useMemo, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
-// 사용 가능한 악기 목록
-const INSTRUMENTS = [
-  { id: 'all', name: '전체', icon: '🎵' },
-  { id: 'vocal', name: '보컬', icon: '🎤' },
-  { id: 'guitar', name: '기타', icon: '🎸' },
-  { id: 'bass', name: '베이스', icon: '🎸' },
-  { id: 'keyboard', name: '건반', icon: '🎹' },
-  { id: 'drums', name: '드럼', icon: '🥁' },
-  { id: 'other', name: '기타 악기', icon: '🎵' },
-]
-
-export type CommunityPost = {
+type CommunityPost = {
   id: string
   author: string
   role: string
-  title?: string // 제목 추가 (선택적)
   message: string
-  tags: string[] // 태그를 배열로 변경
-  instrument: string // 악기 카테고리 추가
-  likes: number // 좋아요 수 추가
-  likedBy: string[] // 좋아요 누른 사용자 목록 추가
-  comments: Comment[] // 댓글 추가
-  timestamp: string
-  files?: { name: string; size: number; type: string; data?: string }[] // 파일 추가 (선택적, data는 base64)
-}
-
-type Comment = {
-  id: string
-  author: string
-  message: string
+  tag: string
   timestamp: string
 }
 
@@ -40,76 +15,25 @@ const INITIAL_POSTS: CommunityPost[] = [
     id: 'p1',
     author: 'JIHOON',
     role: 'Guitar · Producer',
-    title: '네오소울 기타 스템 공유',
-    message: '92bpm 네오소울 리듬 기타 스템 공유합니다. 드럼/보컬 구해요! 함께 작업하실 분 연락주세요.',
-    tags: ['콜라보', '세션구함'],
-    instrument: 'guitar',
-    likes: 15,
-    likedBy: [],
-    comments: [],
+    message: '92bpm 네오소울 리듬 기타 스템 공유합니다. 드럼/보컬 구해요!',
+    tag: '콜라보',
     timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    files: [
-      { name: 'neosoul_guitar_92bpm.mp3', size: 3584000, type: 'audio/mpeg' },
-    ],
   },
   {
     id: 'p2',
     author: 'SORA',
     role: 'Vocal',
-    title: 'Tokyo Sunset Funk 세션 피드백 요청',
-    message: 'Tokyo Sunset Funk 룸에 참여 중입니다. 훅 아이디어 피드백 환영해요. 아래 데모 파일 들어보시고 의견 주시면 감사하겠습니다!',
-    tags: ['세션', '피드백'],
-    instrument: 'vocal',
-    likes: 23,
-    likedBy: [],
-    comments: [],
+    message: 'Tokyo Sunset Funk 룸에 참여 중입니다. 훅 아이디어 피드백 환영해요.',
+    tag: '세션',
     timestamp: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
-    files: [
-      { name: 'vocal_demo.mp3', size: 2048000, type: 'audio/mpeg' },
-      { name: 'session_cover.jpg', size: 512000, type: 'image/jpeg' },
-    ],
   },
   {
     id: 'p3',
     author: 'Min Park',
     role: 'Keys',
-    title: '데스크톱 앱 베타 테스터 모집',
-    message: '데스크톱 앱 베타 합주 테스트할 분 2명 더 필요합니다. 관심 있으신 분들은 댓글로 연락주세요!',
-    tags: ['베타'],
-    instrument: 'keyboard',
-    likes: 8,
-    likedBy: [],
-    comments: [],
+    message: '데스크톱 앱 베타 합주 테스트할 분 2명 더 필요합니다.',
+    tag: '베타',
     timestamp: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
-  },
-  {
-    id: 'p4',
-    author: 'DrumKing',
-    role: 'Drums',
-    title: '재즈 정기 세션 드러머 모집',
-    message: '재즈 드러머 찾습니다! 매주 목요일 정기 세션 예정입니다. 중급 이상 실력이시면 환영합니다.',
-    tags: ['세션', '정기모임'],
-    instrument: 'drums',
-    likes: 12,
-    likedBy: [],
-    comments: [],
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-  },
-  {
-    id: 'p5',
-    author: 'BassPlayer',
-    role: 'Bass',
-    title: '펑크 베이스 라인 피드백 요청',
-    message: '펑크 베이스 라인 피드백 부탁드립니다. 첨부한 파일 들어보시고 의견 남겨주세요!',
-    tags: ['피드백', '콜라보'],
-    instrument: 'bass',
-    likes: 18,
-    likedBy: [],
-    comments: [],
-    timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    files: [
-      { name: 'funk_bassline.mp3', size: 1536000, type: 'audio/mpeg' },
-    ],
   },
 ]
 
@@ -136,528 +60,126 @@ function formatRelativeTime(iso: string) {
 }
 
 export function Community() {
-  const navigate = useNavigate()
-  const [posts, setPosts] = useState<CommunityPost[]>(() => {
-    const saved = localStorage.getItem('community-posts')
-    const version = localStorage.getItem('community-posts-version')
-
-    // 버전이 없거나 구버전이면 새로운 더미 데이터로 초기화
-    if (!version || version !== '2.0') {
-      localStorage.setItem('community-posts-version', '2.0')
-      localStorage.setItem('community-posts', JSON.stringify(INITIAL_POSTS))
-      return INITIAL_POSTS
-    }
-
-    return saved ? JSON.parse(saved) : INITIAL_POSTS
-  })
-  const [selectedInstrument, setSelectedInstrument] = useState('all')
-  const [selectedTag, setSelectedTag] = useState<string | null>(null) // 선택된 태그 필터
+  const [posts, setPosts] = useState<CommunityPost[]>(INITIAL_POSTS)
+  const [newPost, setNewPost] = useState('')
+  const [newTag, setNewTag] = useState('세션')
   const { user } = useAuth()
-
-  // localStorage에 게시물 저장
-  useEffect(() => {
-    localStorage.setItem('community-posts', JSON.stringify(posts))
-  }, [posts])
 
   const trendingTags = useMemo(() => {
     const counts = posts.reduce<Record<string, number>>((acc, post) => {
-      post.tags.forEach(tag => {
-        acc[tag] = (acc[tag] ?? 0) + 1
-      })
+      acc[post.tag] = (acc[post.tag] ?? 0) + 1
       return acc
     }, {})
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
+      .slice(0, 4)
   }, [posts])
 
-  // 인기 게시물 (좋아요 많은 순)
-  const popularPosts = useMemo(() => {
-    return [...posts].sort((a, b) => b.likes - a.likes).slice(0, 3)
-  }, [posts])
-
-  // 악기별 및 태그별 필터링된 게시물
-  const filteredPosts = useMemo(() => {
-    let filtered = posts
-
-    // 악기 필터
-    if (selectedInstrument !== 'all') {
-      filtered = filtered.filter(post => post.instrument === selectedInstrument)
-    }
-
-    // 태그 필터
-    if (selectedTag) {
-      filtered = filtered.filter(post => post.tags.includes(selectedTag))
-    }
-
-    return filtered
-  }, [posts, selectedInstrument, selectedTag])
-
-  const handleLike = (postId: string, e?: React.MouseEvent) => {
-    e?.stopPropagation() // 게시물 클릭 이벤트 전파 방지
-
+  const createPost = () => {
+    if (!newPost.trim()) return
     if (!user) {
-      alert('좋아요를 누르려면 로그인이 필요합니다.')
+      alert('게시글을 작성하려면 로그인이 필요합니다.')
       return
     }
 
-    const userId = user.email || user.uid || 'anonymous'
-
-    setPosts(prev => prev.map(post => {
-      if (post.id === postId) {
-        const likedBy = post.likedBy || []
-        const hasLiked = likedBy.includes(userId)
-
-        if (hasLiked) {
-          // 좋아요 취소
-          return {
-            ...post,
-            likes: Math.max(0, post.likes - 1),
-            likedBy: likedBy.filter(id => id !== userId)
-          }
-        } else {
-          // 좋아요 추가
-          return {
-            ...post,
-            likes: post.likes + 1,
-            likedBy: [...likedBy, userId]
-          }
-        }
-      }
-      return post
-    }))
-  }
-
-  const handlePostClick = (postId: string) => {
-    navigate(`/community/${postId}`)
-  }
-
-  const handleTagClick = (tag: string) => {
-    setSelectedTag(selectedTag === tag ? null : tag)
-  }
-
-  const cardStyle = {
-    background: 'rgba(18, 22, 45, 0.8)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    borderRadius: '12px',
-    padding: '20px 24px',
-    marginBottom: '16px',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
+    const post: CommunityPost = {
+      id: generateId(),
+      author: user.email?.split('@')[0] ?? 'User',
+      role: 'Session Member',
+      message: newPost.trim(),
+      tag: newTag,
+      timestamp: new Date().toISOString(),
+    }
+    setPosts((prev) => [post, ...prev])
+    setNewPost('')
   }
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px' }}>
-      {/* 헤더 */}
-      <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '32px', fontWeight: '700', marginBottom: '8px' }}>커뮤니티</h1>
-        <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '16px' }}>세션 파트너와 아이디어 공유</p>
+    <div className="community-page">
+      <div className="community-header">
+        <div>
+          <h1>커뮤니티</h1>
+          <p>세션 파트너와 아이디어 공유</p>
+        </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '24px' }}>
-        <div>
-          {/* 인기 게시물 섹션 */}
-          <div style={{ marginBottom: '24px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px' }}>🔥 인기 게시물</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {popularPosts.map((post) => (
-                <article
-                  key={post.id}
-                  style={cardStyle}
-                  onClick={() => handlePostClick(post.id)}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(141, 123, 255, 0.4)'
-                    e.currentTarget.style.transform = 'translateY(-2px)'
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
-                    e.currentTarget.style.transform = 'translateY(0)'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <span style={{ fontSize: '20px' }}>
-                        {INSTRUMENTS.find(i => i.id === post.instrument)?.icon}
-                      </span>
-                      <div style={{ flex: 1 }}>
-                        {post.title && (
-                          <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '4px' }}>
-                            {post.title}
-                          </div>
-                        )}
-                        <div style={{ fontSize: '14px', fontWeight: '400', marginBottom: '4px', color: 'rgba(255, 255, 255, 0.85)' }}>
-                          {post.message.length > 60 ? `${post.message.slice(0, 60)}...` : post.message}
-                        </div>
-                        <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.5)' }}>
-                          <span style={{ fontWeight: '600', color: 'rgba(255, 255, 255, 0.7)' }}>{post.author}</span>
-                          {' · '}
-                          {formatRelativeTime(post.timestamp)}
-                        </div>
-                      </div>
-                    </div>
-                    <div
-                      style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {post.tags.length > 0 && post.tags.map((tag, idx) => (
-                        <span
-                          key={idx}
-                          onClick={() => handleTagClick(tag)}
-                          style={{
-                            display: 'inline-block',
-                            background:
-                              selectedTag === tag
-                                ? 'rgba(141, 123, 255, 0.3)'
-                                : 'rgba(141, 123, 255, 0.15)',
-                            color: '#a89fff',
-                            padding: '4px 10px',
-                            borderRadius: '6px',
-                            fontSize: '12px',
-                            fontWeight: '500',
-                            border:
-                              selectedTag === tag
-                                ? '1px solid rgba(141, 123, 255, 0.6)'
-                                : '1px solid rgba(141, 123, 255, 0.3)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          #{tag}
-                        </span>
-                      ))}
-                      <span
-                        style={{
-                          padding: '4px 12px',
-                          background: 'rgba(255, 122, 184, 0.15)',
-                          color: '#ff7ab8',
-                          borderRadius: '6px',
-                          fontSize: '13px',
-                          fontWeight: '500',
-                          cursor: 'pointer',
-                        }}
-                        onClick={(e) => handleLike(post.id, e)}
-                      >
-                        ❤️ {post.likes}
-                      </span>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-
-          {/* 세션별 게시판 섹션 */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: '600', margin: 0 }}>🎵 세션별 게시판</h2>
-              <button
-                onClick={() => navigate('/community/create')}
-                style={{
-                  background: 'linear-gradient(135deg, #8d7bff, #a89fff)',
-                  border: 'none',
-                  color: '#fff',
-                  padding: '10px 20px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  transition: 'all 0.2s',
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)'
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(141, 123, 255, 0.3)'
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)'
-                  e.currentTarget.style.boxShadow = 'none'
-                }}
-              >
-                ✏️ 글 작성
-              </button>
-            </div>
-
-            {/* 악기 탭 */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
-              {INSTRUMENTS.map((instrument) => (
-                <button
-                  key={instrument.id}
-                  onClick={() => setSelectedInstrument(instrument.id)}
-                  style={{
-                    background: selectedInstrument === instrument.id
-                      ? 'linear-gradient(135deg, #8d7bff, #a89fff)'
-                      : 'rgba(18, 22, 45, 0.8)',
-                    border: selectedInstrument === instrument.id
-                      ? '1px solid rgba(141, 123, 255, 0.5)'
-                      : '1px solid rgba(255, 255, 255, 0.1)',
-                    color: '#fff',
-                    padding: '8px 16px',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                  }}
-                >
-                  <span>{instrument.icon}</span>
-                  <span>{instrument.name}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* 활성 필터 표시 */}
-            {selectedTag && (
-              <div
-                style={{
-                  background: 'rgba(141, 123, 255, 0.1)',
-                  border: '1px solid rgba(141, 123, 255, 0.3)',
-                  borderRadius: '8px',
-                  padding: '12px 16px',
-                  marginBottom: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <span style={{ fontSize: '14px' }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.6)' }}>필터:</span>{' '}
-                  <span style={{ color: '#a89fff', fontWeight: '600' }}>#{selectedTag}</span>
-                </span>
-                <button
-                  onClick={() => setSelectedTag(null)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'rgba(255, 255, 255, 0.7)',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    padding: '4px 8px',
-                  }}
-                >
-                  ✕ 필터 해제
-                </button>
+      <div className="community-layout">
+        <div className="community-main">
+          <div className="community-form-card">
+            <h3>새로운 업데이트</h3>
+            {user ? (
+              <>
+                <textarea
+                  value={newPost}
+                  placeholder="세션 계획, 믹스 노트, 협업 요청 등을 남겨보세요."
+                  onChange={(e) => setNewPost(e.target.value)}
+                  rows={4}
+                />
+                <div className="form-row">
+                  <select value={newTag} onChange={(e) => setNewTag(e.target.value)}>
+                    <option value="세션">세션</option>
+                    <option value="콜라보">콜라보</option>
+                    <option value="베타">베타</option>
+                    <option value="피드백">피드백</option>
+                  </select>
+                  <button onClick={createPost} disabled={!newPost.trim()}>
+                    게시
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="login-required">
+                <p>게시글을 작성하려면 로그인이 필요합니다.</p>
               </div>
             )}
+          </div>
 
-            {/* 필터링된 게시글 목록 */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {filteredPosts.length === 0 ? (
-                <div
-                  style={{
-                    padding: '40px',
-                    textAlign: 'center',
-                    color: 'rgba(255, 255, 255, 0.5)',
-                  }}
-                >
-                  {selectedTag
-                    ? `#${selectedTag} 태그가 포함된 게시물이 없습니다.`
-                    : '아직 게시물이 없습니다. 첫 게시물을 작성해보세요!'}
-                </div>
-              ) : (
-                filteredPosts.map((post) => (
-                  <article
-                    key={post.id}
-                    style={cardStyle}
-                    onClick={() => handlePostClick(post.id)}
-                    onMouseOver={(e) => {
-                      e.currentTarget.style.borderColor = 'rgba(141, 123, 255, 0.4)'
-                      e.currentTarget.style.transform = 'translateY(-2px)'
-                    }}
-                    onMouseOut={(e) => {
-                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
-                      e.currentTarget.style.transform = 'translateY(0)'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                          <span style={{ fontSize: '18px' }}>
-                            {INSTRUMENTS.find(i => i.id === post.instrument)?.icon}
-                          </span>
-                          <span style={{ fontWeight: '600', fontSize: '14px', color: 'rgba(255, 255, 255, 0.7)' }}>
-                            {post.author}
-                          </span>
-                          <span style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.4)' }}>·</span>
-                          <span style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.4)' }}>
-                            {post.role}
-                          </span>
-                          <span style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.4)' }}>·</span>
-                          <span style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.4)' }}>
-                            {formatRelativeTime(post.timestamp)}
-                          </span>
-                        </div>
-                        {post.title && (
-                          <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '6px' }}>
-                            {post.title}
-                          </div>
-                        )}
-                        <p style={{ fontSize: '14px', margin: '0 0 8px 0', lineHeight: '1.5', color: 'rgba(255, 255, 255, 0.85)' }}>
-                          {post.message.length > 100 ? `${post.message.slice(0, 100)}...` : post.message}
-                        </p>
-                        {post.files && post.files.length > 0 && (
-                          <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '8px' }}>
-                            📎 첨부파일 {post.files.length}개
-                          </div>
-                        )}
-                        <div
-                          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <span
-                            style={{
-                              padding: '4px 10px',
-                              background: 'rgba(255, 122, 184, 0.15)',
-                              color: '#ff7ab8',
-                              borderRadius: '6px',
-                              fontSize: '12px',
-                              fontWeight: '500',
-                              cursor: 'pointer',
-                            }}
-                            onClick={(e) => handleLike(post.id, e)}
-                          >
-                            ❤️ {post.likes}
-                          </span>
-                        </div>
-                      </div>
-                      {post.tags.length > 0 && (
-                        <div
-                          style={{ display: 'flex', gap: '6px', flexShrink: 0 }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {post.tags.map((tag, idx) => (
-                            <span
-                              key={idx}
-                              onClick={() => handleTagClick(tag)}
-                              style={{
-                                display: 'inline-block',
-                                background:
-                                  selectedTag === tag
-                                    ? 'rgba(141, 123, 255, 0.3)'
-                                    : 'rgba(141, 123, 255, 0.15)',
-                                color: '#a89fff',
-                                padding: '4px 10px',
-                                borderRadius: '6px',
-                                fontSize: '12px',
-                                fontWeight: '500',
-                                border:
-                                  selectedTag === tag
-                                    ? '1px solid rgba(141, 123, 255, 0.6)'
-                                    : '1px solid rgba(141, 123, 255, 0.3)',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </article>
-                ))
-              )}
-            </div>
+          <div className="community-feed">
+            {posts.map((post) => (
+              <article key={post.id} className="post-card">
+                <header className="post-header">
+                  <div className="post-author">
+                    <strong>{post.author}</strong>
+                    <span>{post.role}</span>
+                  </div>
+                  <span className="post-tag">{post.tag}</span>
+                </header>
+                <p className="post-message">{post.message}</p>
+                <footer className="post-footer">{formatRelativeTime(post.timestamp)}</footer>
+              </article>
+            ))}
           </div>
         </div>
 
-        {/* 사이드바 */}
-        <div>
-          {/* 트렌딩 태그 */}
-          <div
-            style={{
-              background: 'rgba(18, 22, 45, 0.8)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '12px',
-              padding: '20px',
-              marginBottom: '16px',
-            }}
-          >
-            <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>트렌딩 태그</h3>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+        <div className="community-sidebar">
+          <div className="tag-cloud-card">
+            <h3>트렌딩 태그</h3>
+            <div className="tag-cloud">
               {trendingTags.length === 0 ? (
-                <p style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '14px' }}>첫 게시물을 남겨주세요.</p>
+                <p className="empty-state">첫 게시물을 남겨주세요.</p>
               ) : (
                 trendingTags.map(([tag, count]) => (
-                  <span
-                    key={tag}
-                    onClick={() => handleTagClick(tag)}
-                    style={{
-                      display: 'inline-block',
-                      background:
-                        selectedTag === tag
-                          ? 'rgba(141, 123, 255, 0.3)'
-                          : 'rgba(141, 123, 255, 0.15)',
-                      color: '#a89fff',
-                      padding: '6px 12px',
-                      borderRadius: '6px',
-                      fontSize: '13px',
-                      fontWeight: '500',
-                      border:
-                        selectedTag === tag
-                          ? '1px solid rgba(141, 123, 255, 0.6)'
-                          : '1px solid rgba(141, 123, 255, 0.3)',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                    }}
-                    onMouseOver={(e) => {
-                      if (selectedTag !== tag) {
-                        e.currentTarget.style.background = 'rgba(141, 123, 255, 0.25)'
-                      }
-                    }}
-                    onMouseOut={(e) => {
-                      if (selectedTag !== tag) {
-                        e.currentTarget.style.background = 'rgba(141, 123, 255, 0.15)'
-                      }
-                    }}
-                  >
-                    #{tag} <small style={{ opacity: 0.7 }}>{count}</small>
+                  <span key={tag} className="tag-pill">
+                    #{tag} <small>{count}</small>
                   </span>
                 ))
               )}
             </div>
           </div>
 
-          {/* 다가오는 세션 */}
-          <div
-            style={{
-              background: 'rgba(18, 22, 45, 0.8)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '12px',
-              padding: '20px',
-            }}
-          >
-            <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>다가오는 세션</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className="upcoming-card">
+            <h3>다가오는 세션</h3>
+            <ul className="upcoming-list">
               {UPCOMING_SESSIONS.map((session) => (
-                <div
-                  key={session.id}
-                  onClick={() => navigate('/rooms')}
-                  style={{
-                    padding: '12px',
-                    background: 'rgba(0, 0, 0, 0.2)',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(255, 255, 255, 0.05)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.background = 'rgba(0, 0, 0, 0.3)'
-                    e.currentTarget.style.borderColor = 'rgba(141, 123, 255, 0.3)'
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.background = 'rgba(0, 0, 0, 0.2)'
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.05)'
-                  }}
-                >
-                  <div style={{ fontWeight: '600', fontSize: '14px', marginBottom: '4px' }}>{session.title}</div>
-                  <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '4px' }}>
-                    {session.time}
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                <li key={session.id} className="upcoming-item">
+                  <strong>{session.title}</strong>
+                  <span className="session-time">{session.time}</span>
+                  <small className="session-details">
                     {session.region} · {session.vibe}
-                  </div>
-                </div>
+                  </small>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         </div>
       </div>

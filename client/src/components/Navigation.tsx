@@ -1,12 +1,9 @@
-import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { AudioSettings } from './AudioSettings'
 
 export function Navigation() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
-  const [showAudioSettings, setShowAudioSettings] = useState(false)
 
   const handleSignOut = async () => {
     try {
@@ -18,14 +15,8 @@ export function Navigation() {
   }
 
   return (
-    <>
-      {/* 오디오 설정 모달 - nav 바깥에 렌더링 */}
-      {showAudioSettings && (
-        <AudioSettings isModal onClose={() => setShowAudioSettings(false)} />
-      )}
-
-      <nav className="top-nav">
-        <div className="brand">
+    <nav className="top-nav">
+      <div className="brand">
         <Link to="/">
           <span>BandSpace</span>
           <small>Web Studio</small>
@@ -39,13 +30,9 @@ export function Navigation() {
         <Link to="/community">커뮤니티</Link>
       </div>
       <div className="nav-actions">
-        <button
-          onClick={() => setShowAudioSettings(true)}
-          className="nav-settings"
-          title="오디오 설정"
-        >
+        <Link to="/settings/audio" className="nav-settings" title="오디오 설정">
           🎛️
-        </button>
+        </Link>
         {user ? (
           <div className="user-menu">
             <span className="user-email">{user.email}</span>
@@ -58,8 +45,7 @@ export function Navigation() {
             로그인
           </Link>
         )}
-        </div>
-      </nav>
-    </>
+      </div>
+    </nav>
   )
 }
