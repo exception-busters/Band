@@ -40,7 +40,6 @@ export function Navigation() {
         <Link to="/recording">녹음</Link>
         <Link to="/mix">Mix Lab</Link>
         <Link to="/community">커뮤니티</Link>
-        <Link to="/pricing">요금제</Link>
       </div>
       <div className="nav-actions">
         <button

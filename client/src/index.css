@@ -112,6 +112,7 @@ select:disabled {
   font-size: 0.75rem;
   font-weight: 600;
   color: #050505;
+  transition: all 0.2s ease;
 }
 
 .upgrade-link {
@@ -259,6 +260,14 @@ select:disabled {
 .plan-status-compact {
   display: flex;
   align-items: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.plan-status-compact:hover .plan-badge-compact {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 /* Responsive */

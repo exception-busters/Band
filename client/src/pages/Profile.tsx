@@ -1,10 +1,10 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import '../styles/profile.css'
 
-type ProfileTab = 'info' | 'follow' | 'theme' | 'support'
+type ProfileTab = 'info' | 'follow' | 'plan' | 'theme' | 'support'
 
 export function Profile() {
   const { user } = useAuth()
@@ -12,6 +12,13 @@ export function Profile() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('info')
+
+  // 요금제 탭 클릭 시 요금제 페이지로 이동
+  useEffect(() => {
+    if (activeTab === 'plan') {
+      navigate('/pricing')
+    }
+  }, [activeTab, navigate])
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isHoveringPhoto, setIsHoveringPhoto] = useState(false)
@@ -123,6 +130,13 @@ export function Profile() {
               <span className="nav-icon">👥</span>
               팔로우/팔로워
               <span className="coming-soon">준비중</span>
+            </button>
+            <button
+              className={`profile-nav-item ${activeTab === 'plan' ? 'active' : ''}`}
+              onClick={() => setActiveTab('plan')}
+            >
+              <span className="nav-icon">💎</span>
+              요금제
             </button>
             <button
               className={`profile-nav-item ${activeTab === 'theme' ? 'active' : ''}`}
