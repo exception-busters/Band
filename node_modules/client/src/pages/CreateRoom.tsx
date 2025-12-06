@@ -201,7 +201,9 @@ export function CreateRoom() {
                 onChange={(e) => setMaxParticipants(Number(e.target.value))}
               >
                 {[2, 4, 6, 8, 10, 12, 16, 20].map(n => (
-                  <option key={n} value={n}>{n}명</option>
+                  <option key={n} value={n}>
+                    {n}명
+                  </option>
                 ))}
               </select>
             </div>

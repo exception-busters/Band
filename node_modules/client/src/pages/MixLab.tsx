@@ -88,6 +88,7 @@ export function MixLab() {
     )
   }
 
+
   return (
     <div className="mixlab-page">
       <div className="mixlab-header">
@@ -110,8 +111,10 @@ export function MixLab() {
             onClick={() => applyMixPreset(preset.id)}
             className={`preset-btn ${selectedPresetId === preset.id ? 'active' : ''}`}
           >
-            <strong>{preset.name}</strong>
-            <span>{preset.description}</span>
+            <div className="preset-content">
+              <strong>{preset.name}</strong>
+              <span>{preset.description}</span>
+            </div>
           </button>
         ))}
       </div>
