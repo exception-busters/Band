@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { usePremium } from '../contexts/PremiumContext'
 
 type RecordingTake = {
   id: string
@@ -34,7 +33,6 @@ function formatRelativeTime(iso: string) {
 }
 
 export function Recording() {
-  const { checkFeatureAccess, showPremiumModal, planLimits } = usePremium()
   const [recordingState, setRecordingState] = useState<'idle' | 'recording' | 'preview'>('idle')
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null)
   const [recordingError, setRecordingError] = useState<string | null>(null)
@@ -186,34 +184,16 @@ export function Recording() {
                   <a download="bandspace-sketch.webm" href={recordingUrl} className="download-btn">
                     💾 로컬 저장
                   </a>
-                  <button 
-                    className={`cloud-save-btn ${!planLimits.hasCloudStorage ? 'disabled' : ''}`}
-                    disabled={!planLimits.hasCloudStorage}
+                  <button
+                    className="cloud-save-btn"
                     onClick={() => {
-                      if (!planLimits.hasCloudStorage) {
-                        showPremiumModal('클라우드 저장', 'standard')
-                        return
-                      }
                       // TODO: 클라우드 저장 로직
                       console.log('Saving to cloud...')
                     }}
                   >
                     ☁️ 클라우드 저장
-                    {!planLimits.hasCloudStorage && <span className="premium-badge">✨ Standard</span>}
                   </button>
                 </div>
-                
-                {!planLimits.hasCloudStorage && (
-                  <div className="feature-info">
-                    ℹ️ 클라우드 저장은 Standard 플랜부터 이용 가능합니다.
-                  </div>
-                )}
-                
-                {planLimits.hasCloudStorage && planLimits.cloudStorageDays && (
-                  <div className="feature-info">
-                    📅 클라우드 저장 기간: {planLimits.cloudStorageDays}일
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -254,19 +234,14 @@ export function Recording() {
                     <a download={`${take.label}.webm`} href={take.url} className="take-download">
                       다운로드
                     </a>
-                    <button 
-                      className={`take-share ${!planLimits.canShareFiles ? 'disabled' : ''}`}
-                      disabled={!planLimits.canShareFiles}
+                    <button
+                      className="take-share"
                       onClick={() => {
-                        if (!planLimits.canShareFiles) {
-                          showPremiumModal('파일 공유', 'standard')
-                          return
-                        }
                         // TODO: 공유 로직
                         console.log('Sharing take...')
                       }}
                     >
-                      공유 {!planLimits.canShareFiles && <span className="premium-badge">✨</span>}
+                      공유
                     </button>
                   </div>
                 </article>

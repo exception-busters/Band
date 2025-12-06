@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { usePremium } from '../contexts/PremiumContext'
 import { supabase } from '../lib/supabaseClient'
 
 const GENRES = [
@@ -32,13 +31,12 @@ interface InstrumentSlot {
 
 export function CreateRoom() {
   const { user } = useAuth()
-  const { checkFeatureAccess, showPremiumModal, userPlan, planLimits, isFeatureDisabled } = usePremium()
   const navigate = useNavigate()
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [genre, setGenre] = useState('록')
-  const [maxParticipants, setMaxParticipants] = useState(Math.min(8, planLimits.maxParticipants))
+  const [maxParticipants, setMaxParticipants] = useState(8)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [customTag, setCustomTag] = useState('')
   const [freeJoin, setFreeJoin] = useState(true)
@@ -196,43 +194,18 @@ export function CreateRoom() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="maxParticipants">
-                최대 인원
-                <span className="plan-limit-info">
-                  현재 플랜: 최대 {planLimits.maxParticipants}명
-                </span>
-              </label>
+              <label htmlFor="maxParticipants">최대 인원</label>
               <select
                 id="maxParticipants"
                 value={maxParticipants}
-                onChange={(e) => {
-                  const newValue = Number(e.target.value)
-                  
-                  if (newValue > planLimits.maxParticipants) {
-                    const requiredPlan = newValue > 6 ? 'pro' : 'standard'
-                    showPremiumModal(`${newValue}명 합주실`, requiredPlan)
-                    return
-                  }
-                  
-                  setMaxParticipants(newValue)
-                }}
+                onChange={(e) => setMaxParticipants(Number(e.target.value))}
               >
-                {[2, 4, 6, 8, 10, 12, 16, 20].map(n => {
-                  const disabled = n > planLimits.maxParticipants
-                  const requiredPlan = n > 6 ? 'Pro' : n > 4 ? 'Standard' : ''
-                  
-                  return (
-                    <option key={n} value={n} disabled={disabled}>
-                      {n}명 {disabled && `(${requiredPlan} 필요)`}
-                    </option>
-                  )
-                })}
+                {[2, 4, 6, 8, 10, 12, 16, 20].map(n => (
+                  <option key={n} value={n}>
+                    {n}명
+                  </option>
+                ))}
               </select>
-              {maxParticipants > planLimits.maxParticipants && (
-                <div className="feature-restriction">
-                  ⚠️ 현재 플랜에서는 최대 {planLimits.maxParticipants}명까지만 가능합니다.
-                </div>
-              )}
             </div>
           </div>
 
@@ -339,23 +312,13 @@ export function CreateRoom() {
 
           {/* 참여 방식 설정 */}
           <div className="form-group">
-            <label>
-              참여 방식
-              {!planLimits.canCreatePrivateRooms && <span className="premium-badge">✨ Standard</span>}
-            </label>
-            <div className={`toggle-option ${!planLimits.canCreatePrivateRooms ? 'disabled' : ''}`}>
+            <label>참여 방식</label>
+            <div className="toggle-option">
               <label className="toggle-switch">
                 <input
                   type="checkbox"
                   checked={freeJoin}
-                  disabled={!planLimits.canCreatePrivateRooms && !freeJoin}
-                  onChange={(e) => {
-                    if (!e.target.checked && !planLimits.canCreatePrivateRooms) {
-                      showPremiumModal('비공개 방 생성', 'standard')
-                      return
-                    }
-                    setFreeJoin(e.target.checked)
-                  }}
+                  onChange={(e) => setFreeJoin(e.target.checked)}
                 />
                 <span className="toggle-slider"></span>
               </label>
@@ -364,11 +327,6 @@ export function CreateRoom() {
                 <span>{freeJoin ? '누구나 바로 연주자로 참여할 수 있습니다' : '방장이 승인해야 연주자로 참여할 수 있습니다'}</span>
               </div>
             </div>
-            {!planLimits.canCreatePrivateRooms && (
-              <div className="feature-restriction">
-                ℹ️ 비공개 방 생성은 Standard 플랜부터 가능합니다.
-              </div>
-            )}
           </div>
 
           {error && <div className="form-error">{error}</div>}

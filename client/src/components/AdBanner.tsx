@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom'
-import { usePremium } from '../contexts/PremiumContext'
 
 interface AdBannerProps {
   position?: 'top' | 'bottom' | 'sidebar'
@@ -7,13 +6,10 @@ interface AdBannerProps {
 }
 
 export function AdBanner({ position = 'bottom', compact = false }: AdBannerProps) {
-  const { planLimits } = usePremium()
+  // 광고 기능은 현재 비활성화
+  return null
 
-  // 광고를 표시하지 않는 플랜이면 렌더링하지 않음
-  if (!planLimits.showAds) {
-    return null
-  }
-
+  /* 향후 광고 기능 활성화 시 사용
   const adContent = {
     top: {
       title: '🎵 더 나은 합주 경험을 원하시나요?',
@@ -62,4 +58,5 @@ export function AdBanner({ position = 'bottom', compact = false }: AdBannerProps
       </div>
     </div>
   )
+  */
 }

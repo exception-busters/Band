@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react'
-import { usePremium } from '../contexts/PremiumContext'
 
 type MixTrack = {
   id: string
@@ -62,28 +61,8 @@ const MIX_PRESETS: MixPreset[] = [
 ]
 
 export function MixLab() {
-  const { checkFeatureAccess, showPremiumModal, planLimits, isFeatureDisabled } = usePremium()
   const [tracks, setTracks] = useState<MixTrack[]>(INITIAL_TRACKS)
   const [selectedPresetId, setSelectedPresetId] = useState<string>(MIX_PRESETS[0]?.id ?? '')
-
-  // Mix Lab 접근 권한 체크
-  if (!planLimits.hasMixLab) {
-    return (
-      <div className="mixlab-page">
-        <div className="feature-locked">
-          <div className="lock-icon">🔒</div>
-          <h2>Mix Lab은 Standard 플랜부터 이용 가능합니다</h2>
-          <p>실시간 믹싱과 이퀄라이저 기능을 사용하려면 플랜을 업그레이드하세요.</p>
-          <button 
-            className="upgrade-button"
-            onClick={() => showPremiumModal('Mix Lab 전체 기능', 'standard')}
-          >
-            Standard로 업그레이드
-          </button>
-        </div>
-      </div>
-    )
-  }
 
   const mixInsights = useMemo(() => {
     const avgVolume = tracks.reduce((sum, track) => sum + track.volume, 0) / tracks.length
@@ -98,15 +77,6 @@ export function MixLab() {
   }
 
   const applyMixPreset = (presetId: string) => {
-    const presetIndex = MIX_PRESETS.findIndex(p => p.id === presetId)
-    
-    // 프리셋 제한 체크
-    if (planLimits.mixLabPresets !== null && presetIndex >= planLimits.mixLabPresets) {
-      const requiredPlan = presetIndex >= 2 ? 'pro' : 'standard'
-      showPremiumModal('고급 Mix Lab 프리셋', requiredPlan)
-      return
-    }
-
     setSelectedPresetId(presetId)
     const preset = MIX_PRESETS.find((item) => item.id === presetId)
     if (!preset) return
@@ -118,15 +88,6 @@ export function MixLab() {
     )
   }
 
-  const handleAdvancedControl = (id: string, key: 'volume' | 'pan' | 'fx', value: number) => {
-    // FX Send는 Standard 이상 필요
-    if (key === 'fx' && !checkFeatureAccess('FX Send 조절', 'standard')) {
-      showPremiumModal('FX Send 조절', 'standard')
-      return
-    }
-
-    handleTrackChange(id, key, value)
-  }
 
   return (
     <div className="mixlab-page">
@@ -144,28 +105,18 @@ export function MixLab() {
       </div>
 
       <div className="mix-presets">
-        {MIX_PRESETS.map((preset, index) => {
-          const isLocked = planLimits.mixLabPresets !== null && index >= planLimits.mixLabPresets
-          const requiredPlan = index >= 2 ? 'Pro' : 'Standard'
-          
-          return (
-            <button
-              key={preset.id}
-              onClick={() => applyMixPreset(preset.id)}
-              className={`preset-btn ${selectedPresetId === preset.id ? 'active' : ''} ${isLocked ? 'locked' : ''}`}
-              disabled={isLocked}
-            >
-              <div className="preset-content">
-                <strong>
-                  {preset.name}
-                  {isLocked && <span className="premium-badge">✨ {requiredPlan}</span>}
-                </strong>
-                <span>{preset.description}</span>
-              </div>
-              {isLocked && <div className="lock-overlay">🔒</div>}
-            </button>
-          )
-        })}
+        {MIX_PRESETS.map((preset) => (
+          <button
+            key={preset.id}
+            onClick={() => applyMixPreset(preset.id)}
+            className={`preset-btn ${selectedPresetId === preset.id ? 'active' : ''}`}
+          >
+            <div className="preset-content">
+              <strong>{preset.name}</strong>
+              <span>{preset.description}</span>
+            </div>
+          </button>
+        ))}
       </div>
 
       <div className="mixlab-grid">
@@ -214,15 +165,14 @@ export function MixLab() {
 
             <div className="mix-control">
               <label>
-                FX Send {!checkFeatureAccess('FX Send 조절', 'standard') && <span className="premium-badge">✨ Standard</span>}
+                FX Send
                 <div className="slider-display">
                   <input
                     type="range"
                     min={0}
                     max={100}
                     value={track.fx}
-                    onChange={(e) => handleAdvancedControl(track.id, 'fx', Number(e.target.value))}
-                    disabled={!checkFeatureAccess('FX Send 조절', 'standard')}
+                    onChange={(e) => handleTrackChange(track.id, 'fx', Number(e.target.value))}
                   />
                   <span>{track.fx}</span>
                 </div>
