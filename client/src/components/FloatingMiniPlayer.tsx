@@ -26,6 +26,9 @@ export function FloatingMiniPlayer() {
     rtcStatus,
     masterMuted,
     toggleMasterMute,
+    localMuted,
+    toggleLocalMute,
+    localStream,
   } = useRoom()
 
   // 미니 플레이어 모드가 아니면 렌더링하지 않음
@@ -91,7 +94,21 @@ export function FloatingMiniPlayer() {
 
       {/* 컨트롤 버튼들 */}
       <div className="mini-player-controls">
-        {/* 음소거 토글 */}
+        {/* 마이크 음소거 토글 (연주자인 경우만 표시) */}
+        {localStream && (
+          <button
+            className={`control-btn mic ${localMuted ? 'muted' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleLocalMute()
+            }}
+            title={localMuted ? '마이크 켜기' : '마이크 끄기'}
+          >
+            {localMuted ? '🎤' : '🎤'}
+          </button>
+        )}
+
+        {/* 스피커 음소거 토글 */}
         <button
           className={`control-btn mute ${masterMuted ? 'muted' : ''}`}
           onClick={(e) => {

@@ -687,24 +687,59 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           autoGainControl: audioSettings.autoGainControl,
         },
       }
-      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+      const rawStream = await navigator.mediaDevices.getUserMedia(constraints)
+
+      // 스테레오 입력을 모노로 합치는 처리 (channelCount가 2이고 stereoMode가 'mono'인 경우)
+      let stream = rawStream
+      const audioTrack = rawStream.getAudioTracks()[0]
+      const trackSettings = audioTrack?.getSettings()
+
+      if (trackSettings?.channelCount === 2 && audioSettings.stereoMode === 'mono') {
+        // Web Audio API로 스테레오 → 모노 변환
+        const audioContext = new AudioContext({ sampleRate: audioSettings.sampleRate })
+        const source = audioContext.createMediaStreamSource(rawStream)
+
+        // 스테레오를 모노로 믹싱하는 노드 생성
+        const merger = audioContext.createChannelMerger(1)
+        const splitter = audioContext.createChannelSplitter(2)
+        const gainL = audioContext.createGain()
+        const gainR = audioContext.createGain()
+
+        // L/R 각각 0.5 볼륨으로 믹싱 (클리핑 방지)
+        gainL.gain.value = 0.5
+        gainR.gain.value = 0.5
+
+        source.connect(splitter)
+        splitter.connect(gainL, 0)  // Left channel
+        splitter.connect(gainR, 1)  // Right channel
+        gainL.connect(merger, 0, 0)
+        gainR.connect(merger, 0, 0)
+
+        // 모노 스트림 생성
+        const destination = audioContext.createMediaStreamDestination()
+        merger.connect(destination)
+
+        stream = destination.stream
+        console.log('[RTC] Stereo input converted to mono')
+      }
+
       setLocalStream(stream)
       // ref도 즉시 업데이트 (createOfferForPeer에서 사용)
       localStreamRef.current = stream
 
-      // 실제 적용된 설정 가져오기
-      const audioTrack = stream.getAudioTracks()[0]
-      if (audioTrack) {
+      // 실제 적용된 설정 가져오기 (원본 스트림 기준)
+      const finalAudioTrack = stream.getAudioTracks()[0]
+      if (finalAudioTrack) {
         // MediaTrackSettings 타입에 latency가 표준에는 없지만 일부 브라우저에서 지원
-        const trackSettings = audioTrack.getSettings() as MediaTrackSettings & { latency?: number }
+        const finalTrackSettings = finalAudioTrack.getSettings() as MediaTrackSettings & { latency?: number }
         setActualStreamSettings({
-          deviceId: trackSettings.deviceId ?? null,
-          sampleRate: trackSettings.sampleRate ?? null,
-          channelCount: trackSettings.channelCount ?? null,
-          echoCancellation: trackSettings.echoCancellation ?? null,
-          noiseSuppression: trackSettings.noiseSuppression ?? null,
-          autoGainControl: trackSettings.autoGainControl ?? null,
-          latency: trackSettings.latency ?? null,
+          deviceId: trackSettings?.deviceId ?? null,  // 원본 rawStream의 설정 사용
+          sampleRate: finalTrackSettings.sampleRate ?? null,
+          channelCount: finalTrackSettings.channelCount ?? null,
+          echoCancellation: trackSettings?.echoCancellation ?? null,
+          noiseSuppression: trackSettings?.noiseSuppression ?? null,
+          autoGainControl: trackSettings?.autoGainControl ?? null,
+          latency: (trackSettings as MediaTrackSettings & { latency?: number })?.latency ?? null,
         })
       }
 
