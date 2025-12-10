@@ -1657,13 +1657,13 @@ body {
 
 .level-meter {
   position: relative;
-  height: 40px;
+  height: 20px;
   background: rgba(0, 0, 0, 0.3);
-  border-radius: 20px;
+  border-radius: 10px;
   overflow: hidden;
   display: flex;
   align-items: center;
-  padding: 0 16px;
+  padding: 0 12px;
   margin-bottom: 20px;
 }
 
@@ -1674,7 +1674,7 @@ body {
   height: 100%;
   background: linear-gradient(90deg, var(--success), var(--warning), var(--error));
   transition: width 0.1s;
-  border-radius: 20px;
+  border-radius: 10px;
 }
 
 .level-value {

@@ -34,10 +34,10 @@ export interface PeerInstrument {
 
 // 피어 네트워크 상태
 export interface PeerNetworkStats {
-  latency: number | null      // RTT in ms
-  jitter: number | null       // 지터 in ms
-  packetsLost: number         // 패킷 손실 수
-  packetLossRate: number      // 패킷 손실률 (%)
+  audioLatency: number | null   // 실제 오디오 지연 (RTT/2 + jitterBuffer) in ms
+  jitter: number | null         // 지터 in ms
+  packetsLost: number           // 패킷 손실 수
+  packetLossRate: number        // 패킷 손실률 (%)
   quality: 'excellent' | 'good' | 'fair' | 'poor' | 'unknown'
 }
 
@@ -71,12 +71,14 @@ export interface Recording {
   mimeType: string
 }
 
-// 네트워크 품질 판정 함수
-function getNetworkQuality(latency: number | null, packetLossRate: number): PeerNetworkStats['quality'] {
-  if (latency === null) return 'unknown'
-  if (latency < 30 && packetLossRate < 1) return 'excellent'
-  if (latency < 60 && packetLossRate < 3) return 'good'
-  if (latency < 100 && packetLossRate < 5) return 'fair'
+// 네트워크 품질 판정 함수 (오디오 지연 기준)
+function getNetworkQuality(audioLatency: number | null, packetLossRate: number): PeerNetworkStats['quality'] {
+  if (audioLatency === null) return 'unknown'
+  // 오디오 지연 기준: 합주 가능 수준 판정
+  // 30ms 이하: 거의 실시간, 50ms 이하: 합주 가능, 100ms 이하: 약간 지연 느낌
+  if (audioLatency < 30 && packetLossRate < 1) return 'excellent'
+  if (audioLatency < 50 && packetLossRate < 3) return 'good'
+  if (audioLatency < 100 && packetLossRate < 5) return 'fair'
   return 'poor'
 }
 
@@ -1836,7 +1838,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         if (!isConnected) {
           // 연결 대기 중인 피어도 표시
           statsUpdate[peerId] = {
-            latency: null,
+            audioLatency: null,
             jitter: null,
             packetsLost: 0,
             packetLossRate: 0,
@@ -1847,8 +1849,10 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
         try {
           const stats = await pc.getStats()
-          let latency: number | null = null
+          let rtt: number | null = null
           let jitter: number | null = null
+          let jitterBufferDelay: number | null = null
+          let playoutDelay: number | null = null
           let packetsLost = 0
           let packetsReceived = 0
 
@@ -1857,18 +1861,18 @@ export function RoomProvider({ children }: { children: ReactNode }) {
             if (report.type === 'candidate-pair' &&
                 (report.state === 'succeeded' || report.nominated === true)) {
               if (typeof report.currentRoundTripTime === 'number') {
-                latency = Math.round(report.currentRoundTripTime * 1000) // ms로 변환
+                rtt = report.currentRoundTripTime * 1000 // ms로 변환
               }
             }
 
             // remote-inbound-rtp에서도 RTT 가져오기 시도 (fallback)
-            if (report.type === 'remote-inbound-rtp' && latency === null) {
+            if (report.type === 'remote-inbound-rtp' && rtt === null) {
               if (typeof report.roundTripTime === 'number') {
-                latency = Math.round(report.roundTripTime * 1000)
+                rtt = report.roundTripTime * 1000
               }
             }
 
-            // inbound-rtp에서 jitter와 패킷 손실 가져오기
+            // inbound-rtp에서 jitter, 패킷 손실, playout delay 가져오기
             if (report.type === 'inbound-rtp' && report.kind === 'audio') {
               if (typeof report.jitter === 'number') {
                 jitter = Math.round(report.jitter * 1000) // ms로 변환
@@ -1879,23 +1883,50 @@ export function RoomProvider({ children }: { children: ReactNode }) {
               if (typeof report.packetsReceived === 'number') {
                 packetsReceived = report.packetsReceived
               }
+              // jitterBufferDelay: 지터 버퍼에서 대기한 총 시간
+              if (typeof report.jitterBufferDelay === 'number' &&
+                  typeof report.jitterBufferEmittedCount === 'number' &&
+                  report.jitterBufferEmittedCount > 0) {
+                jitterBufferDelay = (report.jitterBufferDelay / report.jitterBufferEmittedCount) * 1000 // ms
+              }
+              // totalPlayoutDelay: 수신부터 스피커 출력까지의 총 지연 (디코딩+버퍼+재생)
+              if (typeof report.totalPlayoutDelay === 'number' &&
+                  typeof report.totalSamplesReceived === 'number' &&
+                  report.totalSamplesReceived > 0) {
+                // 샘플당 평균 playout 지연 (초) → ms로 변환
+                // totalPlayoutDelay는 초 단위, totalSamplesReceived는 샘플 수
+                // 48000 샘플 = 1초이므로, (totalPlayoutDelay / totalSamplesReceived) * sampleRate = 실제 지연(초)
+                const sampleRate = 48000 // 기본 샘플레이트
+                playoutDelay = (report.totalPlayoutDelay / report.totalSamplesReceived) * sampleRate * 1000
+              }
             }
           })
 
           const totalPackets = packetsReceived + packetsLost
           const packetLossRate = totalPackets > 0 ? (packetsLost / totalPackets) * 100 : 0
 
+          // 실제 오디오 지연 계산
+          // playoutDelay가 있으면 사용 (수신→재생 지연)
+          // 여기에 네트워크 단방향 지연(RTT/2)을 더하면 송신→재생 전체 지연
+          let audioLatency: number | null = null
+          if (rtt !== null) {
+            const networkDelay = rtt / 2 // 네트워크 단방향 지연
+            // playoutDelay가 있으면 실제 수신→재생 지연 사용, 없으면 jitterBuffer + 5ms 추정
+            const localDelay = playoutDelay ?? (jitterBufferDelay ?? 0) + 5
+            audioLatency = Math.round(networkDelay + localDelay)
+          }
+
           statsUpdate[peerId] = {
-            latency,
+            audioLatency,
             jitter,
             packetsLost,
             packetLossRate: Math.round(packetLossRate * 10) / 10,
-            quality: getNetworkQuality(latency, packetLossRate)
+            quality: getNetworkQuality(audioLatency, packetLossRate)
           }
         } catch (err) {
           console.error(`Failed to get stats for peer ${peerId}:`, err)
           statsUpdate[peerId] = {
-            latency: null,
+            audioLatency: null,
             jitter: null,
             packetsLost: 0,
             packetLossRate: 0,

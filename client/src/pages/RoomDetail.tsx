@@ -1302,9 +1302,9 @@ export function RoomDetail() {
                       <span className="performer-instrument">{instInfo.name}</span>
                     </div>
                     {/* 네트워크 상태 표시 */}
-                    <div className="performer-latency" title={`레이턴시: ${netStats?.latency ?? '?'}ms | 지터: ${netStats?.jitter ?? '?'}ms | 품질: ${qualityInfo.label}`}>
+                    <div className="performer-latency" title={`오디오 지연: ${netStats?.audioLatency ?? '?'}ms | 지터: ${netStats?.jitter ?? '?'}ms | 품질: ${qualityInfo.label}`}>
                       <span className="latency-value" style={{ color: qualityInfo.color }}>
-                        {hasAudioStream ? (netStats?.latency != null ? `${netStats.latency}ms` : '--') : '연결 중'}
+                        {hasAudioStream ? (netStats?.audioLatency != null ? `${netStats.audioLatency}ms` : '--') : '연결 중'}
                       </span>
                       <span className="quality-indicator">{qualityInfo.icon}</span>
                     </div>
@@ -1487,7 +1487,7 @@ export function RoomDetail() {
                     <div className="channel-latency">
                       <span className="quality-dot" style={{ background: qualityInfo.color }}></span>
                       <span className="latency-text">
-                        {netStats?.latency != null ? `${netStats.latency}ms` : '측정 중'}
+                        {netStats?.audioLatency != null ? `${netStats.audioLatency}ms` : '측정 중'}
                         {netStats?.jitter != null && <small> (지터: {netStats.jitter}ms)</small>}
                       </span>
                     </div>
