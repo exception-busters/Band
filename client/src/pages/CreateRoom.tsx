@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabaseClient'
+import './CreateRoom.css'
 
 const GENRES = [
   '록', '재즈', '블루스', '클래식', '팝', '힙합',

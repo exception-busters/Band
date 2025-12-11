@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useRoom } from '../contexts/RoomContext'
 import { supabase } from '../lib/supabaseClient'
+import './RoomDetail.css'
 
 // 안정적인 RemoteAudio 컴포넌트 (re-render 방지)
 const RemoteAudio = memo(function RemoteAudio({

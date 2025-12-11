@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { AudioSettings } from './AudioSettings'
+import { PlanStatus } from './PlanStatus'
+import './Navigation.css'
 
 export function Navigation() {
   const { user, signOut } = useAuth()
@@ -37,6 +39,7 @@ export function Navigation() {
         <Link to="/recording">녹음</Link>
         <Link to="/mix">Mix Lab</Link>
         <Link to="/community">커뮤니티</Link>
+        <Link to="/pricing">요금제</Link>
       </div>
       <div className="nav-actions">
         <button
@@ -48,6 +51,7 @@ export function Navigation() {
         </button>
         {user ? (
           <div className="user-menu">
+            <PlanStatus compact />
             <span className="user-email">{user.email}</span>
             <button onClick={handleSignOut} className="nav-cta">
               로그아웃

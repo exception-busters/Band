@@ -851,7 +851,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
   const joinRoom = (roomId: string, isHost?: boolean) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      setJoinFeedback('시그널링 서버 연결을 확인하세요.')
+      setJoinFeedback('시그널링 서버에 연결 중입니다. 잠시 후 다시 시도해주세요.')
       return
     }
     // userId를 포함하여 서버에서 중복 연결 처리 가능하도록
@@ -1399,7 +1399,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     let reconnectAttempts = 0
 
     const connect = () => {
-      console.log('[WS] Connecting to', SIGNALING_URL)
+      if (import.meta.env.DEV) console.log('[WS] Connecting to', SIGNALING_URL)
       setSignalStatus('connecting')
       const ws = new WebSocket(SIGNALING_URL)
       wsRef.current = ws
@@ -1410,12 +1410,12 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         reconnectAttempts = 0 // 연결 성공 시 재연결 시도 횟수 리셋
       }
       ws.onerror = () => {
-        console.error('[WS] Connection error')
+        // 서버 미실행 시 에러 로그 최소화
         if (!isMounted) return
         setSignalStatus('error')
       }
       ws.onclose = (event) => {
-        console.log('[WS] Closed:', event.code, event.reason)
+        if (import.meta.env.DEV && event.code !== 1006) console.log('[WS] Closed:', event.code, event.reason)
         if (!isMounted) return
         setSignalStatus('idle')
         setClientId(null)
@@ -1805,6 +1805,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         }
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Update peer connections when local stream changes

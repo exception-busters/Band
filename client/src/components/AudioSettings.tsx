@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAudioSettings, AudioPreset, StereoMode } from '../contexts/AudioSettingsContext'
+import './AudioSettings.css'
 
 interface AudioSettingsProps {
   onClose?: () => void
