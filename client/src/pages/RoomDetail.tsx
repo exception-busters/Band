@@ -1,8 +1,9 @@
-import { useEffect, useState, useRef, memo } from 'react'
+import { useEffect, useState, useRef, memo, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useRoom } from '../contexts/RoomContext'
 import { supabase } from '../lib/supabaseClient'
+import './RoomDetail.css'
 
 // 안정적인 RemoteAudio 컴포넌트 (re-render 방지)
 const RemoteAudio = memo(function RemoteAudio({
@@ -157,6 +158,14 @@ export function RoomDetail() {
     myRequestInstrument,
     requestPerform,
     cancelRequest,
+    // 악기 변경 요청
+    pendingInstrumentChanges,
+    approveInstrumentChange,
+    rejectInstrumentChange,
+    myInstrumentChangeStatus,
+    myNewInstrument,
+    requestInstrumentChange,
+    cancelInstrumentChangeRequest,
     // 녹음
     isRecording,
     recordings,
@@ -164,6 +173,10 @@ export function RoomDetail() {
     startRecording,
     stopRecording,
     deleteRecording,
+    // 미니 플레이어 모드
+    enterMiniPlayerMode,
+    clearMiniPlayerMode,
+    currentRoomId: contextRoomId,
   } = useRoom()
 
   // 네트워크 품질 아이콘
@@ -177,18 +190,67 @@ export function RoomDetail() {
 
   const [room, setRoom] = useState<Room | null>(null)
   const [loading, setLoading] = useState(true)
-  const [isPerformer, setIsPerformer] = useState(false)
+  // 연주자 상태: localStream과 myInstrument가 있으면 연주자로 초기화 (미니 플레이어에서 돌아올 때)
+  const [isPerformer, setIsPerformer] = useState(() => !!(localStream && myInstrument))
   const [showPendingRequests, setShowPendingRequests] = useState(false)
   const [showRoomInfo, setShowRoomInfo] = useState(false)
   const [showInstrumentSelect, setShowInstrumentSelect] = useState(false)
   const [showRoomSettings, setShowRoomSettings] = useState(false)
   const [showRecordings, setShowRecordings] = useState(false)
+  const [showInstrumentChangeModal, setShowInstrumentChangeModal] = useState(false)
   const [hostNickname, setHostNickname] = useState<string | null>(null)
   const [chatInput, setChatInput] = useState('')
   const localPreviewRef = useRef<HTMLAudioElement | null>(null)
   const chatContainerRef = useRef<HTMLDivElement | null>(null)
   const hasJoinedRef = useRef(false)
+  // 악기 변경 말풍선 위치 계산을 위한 refs
+  const performerRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const performersListRef = useRef<HTMLDivElement | null>(null)
+  const [bubblePositions, setBubblePositions] = useState<Record<string, { top: number; left: number }>>({})
 
+  // 말풍선 위치 업데이트 함수
+  const updateBubblePositions = useCallback(() => {
+    const newPositions: Record<string, { top: number; left: number }> = {}
+    pendingInstrumentChanges.forEach(request => {
+      const el = performerRefs.current[request.oderId]
+      if (el) {
+        const rect = el.getBoundingClientRect()
+        newPositions[request.oderId] = {
+          top: rect.top + rect.height / 2,
+          left: rect.right + 8
+        }
+      }
+    })
+    setBubblePositions(newPositions)
+  }, [pendingInstrumentChanges])
+
+  // 스크롤/리사이즈 시 말풍선 위치 업데이트
+  useEffect(() => {
+    if (pendingInstrumentChanges.length === 0) return
+
+    updateBubblePositions()
+
+    const performersList = performersListRef.current
+
+    // 스크롤 이벤트 핸들러
+    const handleScroll = () => {
+      requestAnimationFrame(updateBubblePositions)
+    }
+    const handleResize = () => {
+      requestAnimationFrame(updateBubblePositions)
+    }
+
+    // performers-list 스크롤 이벤트 리스너
+    performersList?.addEventListener('scroll', handleScroll, { passive: true })
+    window.addEventListener('resize', handleResize)
+    window.addEventListener('scroll', handleScroll, { passive: true })
+
+    return () => {
+      performersList?.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('scroll', handleScroll)
+    }
+  }, [pendingInstrumentChanges, updateBubblePositions])
 
   // 방 설정 폼 상태
   const [editTitle, setEditTitle] = useState('')
@@ -272,11 +334,34 @@ export function RoomDetail() {
     fetchHostNickname()
   }, [room?.host_id])
 
-  // 방 입장 시 자동으로 joinRoom 호출 + DB 참여자 수 증가, 동기화화
+  // clearMiniPlayerMode를 ref로 저장 (의존성 문제 방지)
+  const clearMiniPlayerModeRef = useRef(clearMiniPlayerMode)
+  useEffect(() => {
+    clearMiniPlayerModeRef.current = clearMiniPlayerMode
+  }, [clearMiniPlayerMode])
 
+  // 방 입장 시 자동으로 joinRoom 호출
   useEffect(() => {
     // 인증 로딩이 완료될 때까지 대기 (isHost 정확히 계산하기 위해)
     if (authLoading) return
+
+    // 이미 같은 방에 연결되어 있으면 (미니 플레이어에서 돌아온 경우 등) joinRoom 불필요
+    if (contextRoomId === roomId) {
+      if (!hasJoinedRef.current) {
+        console.log('[ROOM] Already connected to this room, skipping joinRoom')
+        hasJoinedRef.current = true
+        // 미니 플레이어 모드 해제
+        clearMiniPlayerModeRef.current()
+      }
+      return
+    }
+
+    // 다른 방에 연결되어 있으면 먼저 나가기 (미니 플레이어 모드도 해제됨)
+    if (contextRoomId && contextRoomId !== roomId) {
+      console.log('[ROOM] Connected to different room, leaving first:', contextRoomId.slice(0, 8))
+      leaveRoom()
+      hasJoinedRef.current = false
+    }
 
     if (room && roomId && signalStatus === 'connected' && !hasJoinedRef.current) {
       hasJoinedRef.current = true
@@ -284,77 +369,33 @@ export function RoomDetail() {
       const hostFlag = user && room.host_id === user.id
       joinRoom(roomId, hostFlag || false)
       console.log('[ROOM] Joining room with isHost:', hostFlag, 'user:', user?.id, 'host_id:', room.host_id)
-
-
-
-      // 입장 시 즉시 참여자 수 동기화 (peers.length + 1 = 나)
-      if (supabase) {
-        const initialCount = peers.length + 1
-        supabase
-          .from('rooms')
-          .update({ current_participants: initialCount })
-          .eq('id', roomId)
-          .then(({ error }) => {
-            if (error) {
-              console.error('[SYNC] Initial sync failed:', error)
-            } else {
-              console.log('[SYNC] Initial participants synced to', initialCount)
-            }
-          })
-      }
+      // 참여자 수 동기화는 room-state 수신 후 peers 변경 시 자동으로 처리됨
     }
-  }, [room, roomId, signalStatus, authLoading, user, joinRoom, peers.length])
+  }, [room, roomId, signalStatus, authLoading, user, joinRoom, leaveRoom, contextRoomId])
 
-  // peers 변경 시 실제 인원수로 DB 동기화 (WebSocket 연결 기준 - 항상 정확함)
+  // 함수들을 ref로 저장 (의존성 문제 방지)
+  const leaveRoomRef = useRef(leaveRoom)
+  const enterMiniPlayerModeRef = useRef(enterMiniPlayerMode)
   useEffect(() => {
-    if (!roomId || !supabase || !hasJoinedRef.current) return
+    leaveRoomRef.current = leaveRoom
+    enterMiniPlayerModeRef.current = enterMiniPlayerMode
+  }, [leaveRoom, enterMiniPlayerMode])
 
-    const actualCount = peers.length + 1 // peers + 나
-    const sb = supabase // TypeScript narrowing
-
-    const syncParticipants = async () => {
-      try {
-        const { error } = await sb
-          .from('rooms')
-          .update({ current_participants: actualCount })
-          .eq('id', roomId)
-
-        if (error) {
-          console.error('[SYNC] Failed to sync participants:', error)
-        } else {
-          console.log('[SYNC] Participants synced to', actualCount)
-        }
-      } catch (err) {
-        console.error('[SYNC] Exception while syncing participants:', err)
-      }
-    }
-
-    syncParticipants()
-  }, [roomId, peers.length])
-
-  // 페이지 이탈 시 참여자 수 감소 (cleanup)
+  // 페이지 이탈 시 cleanup - 미니 플레이어 모드로 전환 (방에서 완전히 나가지 않음)
   useEffect(() => {
-    if (!roomId || !supabase) return
+    if (!roomId) return
 
-    const currentRoomId = roomId
-    const sb = supabase
-
-    // cleanup: 컴포넌트 언마운트 시 (다른 페이지로 이동 또는 브라우저 종료)
+    // cleanup: 컴포넌트 언마운트 시
     return () => {
-      // React 내 페이지 전환 시 decrement
       if (hasJoinedRef.current) {
-        hasJoinedRef.current = false
-        sb.rpc('decrement_participants', { room_id: currentRoomId })
-          .then(({ error }) => {
-            if (error) {
-              console.error('[CLEANUP] Failed to decrement participants:', error)
-            } else {
-              console.log('[CLEANUP] Participants decremented for room', currentRoomId.slice(0, 8))
-            }
-          })
+        // hasJoinedRef는 유지 (미니 플레이어에서 돌아올 때 재사용)
+        console.log('[CLEANUP] Page leaving, entering mini player mode:', roomId.slice(0, 8))
+        // leaveRoom 대신 미니 플레이어 모드로 전환
+        enterMiniPlayerModeRef.current()
       }
     }
   }, [roomId])
+
 
   useEffect(() => {
     if (localPreviewRef.current) {
@@ -1031,6 +1072,59 @@ export function RoomDetail() {
         </div>
       )}
 
+      {/* 악기 변경 요청 모달 */}
+      {showInstrumentChangeModal && (
+        <div className="instrument-select-modal">
+          <div className="modal-backdrop" onClick={() => setShowInstrumentChangeModal(false)} />
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>🔄 악기 변경 요청</h2>
+              <button onClick={() => setShowInstrumentChangeModal(false)} className="close-btn">×</button>
+            </div>
+            <div className="modal-body">
+              <p className="modal-description">
+                현재 악기: <strong>{INSTRUMENT_INFO[myInstrument || '']?.name || myInstrument}</strong>
+              </p>
+              <p className="modal-description">변경할 악기를 선택하세요 (방장의 승인이 필요합니다)</p>
+              <div className="instrument-grid">
+                {room?.instrument_slots?.map(slot => {
+                  const info = INSTRUMENT_INFO[slot.instrument] || { icon: '🎵', name: slot.instrument }
+                  const used = getInstrumentUsage(slot.instrument)
+                  // 현재 내 악기는 내가 사용 중이므로 1 빼줌
+                  const myCurrentUsage = slot.instrument === myInstrument ? 1 : 0
+                  const available = slot.count - used + myCurrentUsage
+                  const isAvailable = available > 0 && slot.instrument !== myInstrument
+
+                  return (
+                    <button
+                      key={slot.instrument}
+                      className={`instrument-option ${!isAvailable ? 'disabled' : ''} ${slot.instrument === myInstrument ? 'current' : ''}`}
+                      onClick={() => {
+                        if (isAvailable) {
+                          requestInstrumentChange(slot.instrument)
+                          setShowInstrumentChangeModal(false)
+                        }
+                      }}
+                      disabled={!isAvailable}
+                    >
+                      <span className="inst-icon">{info.icon}</span>
+                      <span className="inst-name">{info.name}</span>
+                      {slot.instrument === myInstrument ? (
+                        <span className="inst-slots current">현재</span>
+                      ) : (
+                        <span className={`inst-slots ${available === 0 ? 'full' : ''}`}>
+                          {available}/{slot.count}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 녹음 목록 모달 */}
       {showRecordings && (
         <div className="recordings-modal">
@@ -1131,7 +1225,7 @@ export function RoomDetail() {
             <span className="performer-count">{performerCount}명</span>
           </div>
 
-          <div className="performers-list">
+          <div className="performers-list" ref={performersListRef}>
             {/* 내 오디오 (연주자일 경우) */}
             {isPerformer && myInstrument && (
               <div className={`performer-item me ${localStream ? 'active' : 'muted'}`}>
@@ -1145,6 +1239,32 @@ export function RoomDetail() {
                 <div className="performer-info">
                   <span className="performer-name">{nickname} {isHost && '(방장)'}</span>
                   <span className="performer-instrument">{INSTRUMENT_INFO[myInstrument]?.name || myInstrument}</span>
+                  {/* 방장이 아닌 연주자: 악기 변경 요청 UI */}
+                  {!isHost && myInstrumentChangeStatus === 'none' && (
+                    <button
+                      onClick={() => setShowInstrumentChangeModal(true)}
+                      className="change-instrument-btn"
+                      title="악기 변경 요청"
+                    >
+                      🔄 악기 변경
+                    </button>
+                  )}
+                  {!isHost && myInstrumentChangeStatus === 'pending' && (
+                    <div className="my-instrument-change-status pending">
+                      <span>⏳ 변경 요청 중: {INSTRUMENT_INFO[myNewInstrument || '']?.name || myNewInstrument}</span>
+                      <button onClick={cancelInstrumentChangeRequest} className="cancel-btn small">취소</button>
+                    </div>
+                  )}
+                  {!isHost && myInstrumentChangeStatus === 'approved' && (
+                    <div className="my-instrument-change-status approved">
+                      <span>✅ 변경 승인됨!</span>
+                    </div>
+                  )}
+                  {!isHost && myInstrumentChangeStatus === 'rejected' && (
+                    <div className="my-instrument-change-status rejected">
+                      <span>❌ 변경 거절됨</span>
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={toggleLocalMute}
@@ -1165,34 +1285,40 @@ export function RoomDetail() {
               const hasAudioStream = remoteAudioMap[oderId] !== undefined
 
               return (
-                <div key={oderId} className={`performer-item ${hasAudioStream ? 'active' : 'connecting'}`}>
-                  <div className="performer-avatar">
-                    {peerInfo.isHost && <span className="host-crown">👑</span>}
-                    <div className="avatar-circle">
-                      <span>{instInfo.icon}</span>
+                <div
+                  key={oderId}
+                  className="performer-item-wrapper"
+                  ref={(el) => { performerRefs.current[oderId] = el }}
+                >
+                  <div className={`performer-item ${hasAudioStream ? 'active' : 'connecting'}`}>
+                    <div className="performer-avatar">
+                      {peerInfo.isHost && <span className="host-crown">👑</span>}
+                      <div className="avatar-circle">
+                        <span>{instInfo.icon}</span>
+                      </div>
+                      {hasAudioStream && <span className="live-indicator" />}
                     </div>
-                    {hasAudioStream && <span className="live-indicator" />}
+                    <div className="performer-info">
+                      <span className="performer-name">{peerInfo.nickname || `연주자 ${oderId.slice(0, 4)}`} {peerInfo.isHost && '(방장)'}</span>
+                      <span className="performer-instrument">{instInfo.name}</span>
+                    </div>
+                    {/* 네트워크 상태 표시 */}
+                    <div className="performer-latency" title={`오디오 지연: ${netStats?.audioLatency ?? '?'}ms | 지터: ${netStats?.jitter ?? '?'}ms | 품질: ${qualityInfo.label}`}>
+                      <span className="latency-value" style={{ color: qualityInfo.color }}>
+                        {hasAudioStream ? (netStats?.audioLatency != null ? `${netStats.audioLatency}ms` : '--') : '연결 중'}
+                      </span>
+                      <span className="quality-indicator">{qualityInfo.icon}</span>
+                    </div>
+                    {/* 오디오 재생 */}
+                    {hasAudioStream && (
+                      <RemoteAudio
+                        oderId={oderId}
+                        stream={remoteAudioMap[oderId]}
+                        registerAudioStream={registerAudioStream}
+                        unregisterAudioStream={unregisterAudioStream}
+                      />
+                    )}
                   </div>
-                  <div className="performer-info">
-                    <span className="performer-name">{peerInfo.nickname || `연주자 ${oderId.slice(0, 4)}`} {peerInfo.isHost && '(방장)'}</span>
-                    <span className="performer-instrument">{instInfo.name}</span>
-                  </div>
-                  {/* 네트워크 상태 표시 */}
-                  <div className="performer-latency" title={`레이턴시: ${netStats?.latency ?? '?'}ms | 지터: ${netStats?.jitter ?? '?'}ms | 품질: ${qualityInfo.label}`}>
-                    <span className="latency-value" style={{ color: qualityInfo.color }}>
-                      {hasAudioStream ? (netStats?.latency != null ? `${netStats.latency}ms` : '--') : '연결 중'}
-                    </span>
-                    <span className="quality-indicator">{qualityInfo.icon}</span>
-                  </div>
-                  {/* 오디오 재생 */}
-                  {hasAudioStream && (
-                    <RemoteAudio
-                      oderId={oderId}
-                      stream={remoteAudioMap[oderId]}
-                      registerAudioStream={registerAudioStream}
-                      unregisterAudioStream={unregisterAudioStream}
-                    />
-                  )}
                 </div>
               )
             })}
@@ -1362,7 +1488,7 @@ export function RoomDetail() {
                     <div className="channel-latency">
                       <span className="quality-dot" style={{ background: qualityInfo.color }}></span>
                       <span className="latency-text">
-                        {netStats?.latency != null ? `${netStats.latency}ms` : '측정 중'}
+                        {netStats?.audioLatency != null ? `${netStats.audioLatency}ms` : '측정 중'}
                         {netStats?.jitter != null && <small> (지터: {netStats.jitter}ms)</small>}
                       </span>
                     </div>
@@ -1493,6 +1619,46 @@ export function RoomDetail() {
           </form>
         </aside>
       </div>
+
+      {/* 악기 변경 요청 말풍선들 (fixed position으로 믹서 위에 표시) */}
+      {isHost && pendingInstrumentChanges.map(request => {
+        const pos = bubblePositions[request.oderId]
+        if (!pos) return null
+
+        return (
+          <div
+            key={request.oderId}
+            className="instrument-change-bubble fixed"
+            style={{
+              top: pos.top,
+              left: pos.left
+            }}
+          >
+            <div className="bubble-arrow" />
+            <div className="bubble-content">
+              <span className="bubble-text">
+                🔄 {INSTRUMENT_INFO[request.newInstrument]?.icon} {INSTRUMENT_INFO[request.newInstrument]?.name || request.newInstrument}
+              </span>
+              <div className="bubble-actions">
+                <button
+                  onClick={() => approveInstrumentChange(request.oderId)}
+                  className="bubble-btn approve"
+                  title="승인"
+                >
+                  ✓
+                </button>
+                <button
+                  onClick={() => rejectInstrumentChange(request.oderId)}
+                  className="bubble-btn reject"
+                  title="거절"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
