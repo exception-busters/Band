@@ -4,6 +4,7 @@ import { RoomProvider } from './contexts/RoomContext'
 import { AudioSettingsProvider } from './contexts/AudioSettingsContext'
 import { PremiumProvider } from './contexts/PremiumContext'
 import { Navigation } from './components/Navigation'
+import { FloatingMiniPlayer } from './components/FloatingMiniPlayer'
 import { PremiumModal } from './components/PremiumModal'
 import { Home } from './pages/Home'
 import { Auth } from './pages/Auth'
@@ -60,6 +61,9 @@ function AppContent() {
       <footer className="app-footer">
         <p>BandSpace · Syncroom-inspired 데모. 데스크톱 / 모바일 확장을 준비 중입니다.</p>
       </footer>
+
+      {/* 미니 플레이어 - 합주실에서 다른 페이지로 이동했을 때 표시 */}
+      <FloatingMiniPlayer />
 
       <PremiumModal
         isOpen={premiumModal.isOpen}
