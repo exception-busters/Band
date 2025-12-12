@@ -14,12 +14,6 @@ const INSTRUMENTS = [
   { id: 'other', name: '기타 악기', icon: '🎵' },
 ]
 
-const UPCOMING_SESSIONS = [
-  { id: 'up1', title: 'Neo Groove Night', time: '오늘 · 22:00', region: 'Seoul Edge', vibe: 'Neo Soul · 92 bpm' },
-  { id: 'up2', title: 'Sunset Funk Bus', time: '내일 · 20:30', region: 'Tokyo Edge', vibe: 'City Funk · 108 bpm' },
-  { id: 'up3', title: 'Nautica Lab', time: '토요일 · 18:00', region: 'LA Edge', vibe: 'Ambient · 76 bpm' },
-]
-
 function formatRelativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime()
   const minutes = Math.max(0, Math.round(diff / 60000))
@@ -92,15 +86,15 @@ export function Community() {
     }
 
     try {
-      const isLiked = await communityApi.toggleLike(postId, user.id)
+      const { liked, likesCount } = await communityApi.toggleLike(postId, user.id)
 
       // Update local state
       setPosts(prev => prev.map(post => {
         if (post.id === postId) {
           return {
             ...post,
-            likes_count: isLiked ? post.likes_count + 1 : Math.max(0, post.likes_count - 1),
-            liked_by_user: isLiked
+            likes_count: likesCount,
+            liked_by_user: liked
           }
         }
         return post
@@ -363,10 +357,6 @@ export function Community() {
                           </span>
                           <span style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.4)' }}>·</span>
                           <span style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.4)' }}>
-                            {post.author_role}
-                          </span>
-                          <span style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.4)' }}>·</span>
-                          <span style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.4)' }}>
                             {formatRelativeTime(post.created_at)}
                           </span>
                         </div>
@@ -485,50 +475,6 @@ export function Community() {
                   </span>
                 ))
               )}
-            </div>
-          </div>
-
-          {/* 다가오는 세션 */}
-          <div
-            style={{
-              background: 'rgba(18, 22, 45, 0.8)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '12px',
-              padding: '20px',
-            }}
-          >
-            <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>다가오는 세션</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {UPCOMING_SESSIONS.map((session) => (
-                <div
-                  key={session.id}
-                  onClick={() => navigate('/rooms')}
-                  style={{
-                    padding: '12px',
-                    background: 'rgba(0, 0, 0, 0.2)',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(255, 255, 255, 0.05)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.background = 'rgba(0, 0, 0, 0.3)'
-                    e.currentTarget.style.borderColor = 'rgba(141, 123, 255, 0.3)'
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.background = 'rgba(0, 0, 0, 0.2)'
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.05)'
-                  }}
-                >
-                  <div style={{ fontWeight: '600', fontSize: '14px', marginBottom: '4px' }}>{session.title}</div>
-                  <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '4px' }}>
-                    {session.time}
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
-                    {session.region} · {session.vibe}
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         </div>

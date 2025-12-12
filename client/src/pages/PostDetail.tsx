@@ -3,6 +3,312 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { communityApi, type Post, type Comment } from '../services/communityApi'
 
+// Comment component for rendering nested comments
+interface CommentItemProps {
+  comment: Comment
+  user: { id: string; email?: string } | null
+  postId: string
+  depth?: number
+  onReply: (parentId: string, content: string) => Promise<void>
+  onEdit: (commentId: string, content: string) => Promise<void>
+  onDelete: (commentId: string) => Promise<void>
+  formatTime: (iso: string) => string
+}
+
+function CommentItem({ comment, user, postId, depth = 0, onReply, onEdit, onDelete, formatTime }: CommentItemProps) {
+  const [isReplying, setIsReplying] = useState(false)
+  const [replyContent, setReplyContent] = useState('')
+  const [isEditing, setIsEditing] = useState(false)
+  const [editContent, setEditContent] = useState(comment.content)
+  const [submitting, setSubmitting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  const isAuthor = user && user.id === comment.author_id
+  const maxDepth = 2 // 최대 대댓글 깊이
+
+  const handleSubmitReply = async () => {
+    if (!replyContent.trim()) return
+    setSubmitting(true)
+    try {
+      await onReply(comment.id, replyContent.trim())
+      setReplyContent('')
+      setIsReplying(false)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleSubmitEdit = async () => {
+    if (!editContent.trim()) return
+    setSubmitting(true)
+    try {
+      await onEdit(comment.id, editContent.trim())
+      setIsEditing(false)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    setSubmitting(true)
+    try {
+      await onDelete(comment.id)
+    } finally {
+      setSubmitting(false)
+      setShowDeleteConfirm(false)
+    }
+  }
+
+  return (
+    <div style={{ marginLeft: depth > 0 ? '24px' : '0' }}>
+      <div
+        style={{
+          padding: '16px',
+          background: depth > 0 ? 'rgba(141, 123, 255, 0.05)' : 'rgba(0, 0, 0, 0.25)',
+          borderRadius: '8px',
+          border: `1px solid ${depth > 0 ? 'rgba(141, 123, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)'}`,
+          marginBottom: '8px',
+        }}
+      >
+        {/* 댓글 헤더 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+          <div style={{ fontSize: '14px' }}>
+            <span style={{ fontWeight: '600', color: 'rgba(255, 255, 255, 0.9)' }}>
+              {comment.author_name}
+            </span>
+            <span style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '13px', marginLeft: '8px' }}>
+              {formatTime(comment.created_at)}
+              {comment.updated_at && comment.updated_at !== comment.created_at && (
+                <span style={{ marginLeft: '4px' }}>(수정됨)</span>
+              )}
+            </span>
+          </div>
+          {isAuthor && !isEditing && (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setIsEditing(true)}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  background: 'rgba(141, 123, 255, 0.2)',
+                  color: '#a89fff',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                }}
+              >
+                수정
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  background: 'rgba(255, 100, 100, 0.2)',
+                  color: '#ff6464',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                }}
+              >
+                삭제
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 댓글 본문 또는 수정 폼 */}
+        {isEditing ? (
+          <div>
+            <textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              rows={3}
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '6px',
+                border: '1px solid rgba(141, 123, 255, 0.3)',
+                background: 'rgba(0, 0, 0, 0.3)',
+                color: '#fff',
+                fontSize: '14px',
+                resize: 'vertical',
+                marginBottom: '8px',
+                fontFamily: 'inherit',
+              }}
+            />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={handleSubmitEdit}
+                disabled={!editContent.trim() || submitting}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: editContent.trim() && !submitting ? '#8d7bff' : 'rgba(141, 123, 255, 0.3)',
+                  color: '#fff',
+                  cursor: editContent.trim() && !submitting ? 'pointer' : 'not-allowed',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                }}
+              >
+                {submitting ? '저장 중...' : '저장'}
+              </button>
+              <button
+                onClick={() => {
+                  setIsEditing(false)
+                  setEditContent(comment.content)
+                }}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  background: 'transparent',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                }}
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p style={{ margin: 0, lineHeight: '1.6', fontSize: '15px', color: 'rgba(255, 255, 255, 0.85)' }}>
+            {comment.content}
+          </p>
+        )}
+
+        {/* 답글 버튼 */}
+        {!isEditing && user && depth < maxDepth && (
+          <button
+            onClick={() => setIsReplying(!isReplying)}
+            style={{
+              marginTop: '10px',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              border: 'none',
+              background: 'transparent',
+              color: 'rgba(141, 123, 255, 0.8)',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: '500',
+            }}
+          >
+            {isReplying ? '취소' : '답글'}
+          </button>
+        )}
+
+        {/* 답글 입력 폼 */}
+        {isReplying && (
+          <div style={{ marginTop: '12px' }}>
+            <textarea
+              value={replyContent}
+              onChange={(e) => setReplyContent(e.target.value)}
+              placeholder="답글을 입력하세요..."
+              rows={3}
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '6px',
+                border: '1px solid rgba(141, 123, 255, 0.3)',
+                background: 'rgba(0, 0, 0, 0.3)',
+                color: '#fff',
+                fontSize: '14px',
+                resize: 'vertical',
+                marginBottom: '8px',
+                fontFamily: 'inherit',
+              }}
+            />
+            <button
+              onClick={handleSubmitReply}
+              disabled={!replyContent.trim() || submitting}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                border: 'none',
+                background: replyContent.trim() && !submitting ? '#8d7bff' : 'rgba(141, 123, 255, 0.3)',
+                color: '#fff',
+                cursor: replyContent.trim() && !submitting ? 'pointer' : 'not-allowed',
+                fontSize: '13px',
+                fontWeight: '600',
+              }}
+            >
+              {submitting ? '작성 중...' : '답글 작성'}
+            </button>
+          </div>
+        )}
+
+        {/* 삭제 확인 */}
+        {showDeleteConfirm && (
+          <div style={{
+            marginTop: '12px',
+            padding: '12px',
+            background: 'rgba(255, 100, 100, 0.1)',
+            borderRadius: '6px',
+            border: '1px solid rgba(255, 100, 100, 0.3)',
+          }}>
+            <p style={{ margin: '0 0 10px 0', fontSize: '14px', color: 'rgba(255, 255, 255, 0.8)' }}>
+              정말 이 댓글을 삭제하시겠습니까?
+            </p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={handleDelete}
+                disabled={submitting}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: submitting ? 'rgba(255, 100, 100, 0.5)' : '#ff6464',
+                  color: '#fff',
+                  cursor: submitting ? 'not-allowed' : 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                }}
+              >
+                {submitting ? '삭제 중...' : '삭제'}
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  background: 'transparent',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                }}
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 대댓글 렌더링 */}
+      {comment.replies && comment.replies.length > 0 && (
+        <div style={{ marginTop: '4px' }}>
+          {comment.replies.map((reply) => (
+            <CommentItem
+              key={reply.id}
+              comment={reply}
+              user={user}
+              postId={postId}
+              depth={depth + 1}
+              onReply={onReply}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              formatTime={formatTime}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const INSTRUMENTS = [
   { id: 'all', name: '전체', icon: '🎵' },
   { id: 'vocal', name: '보컬', icon: '🎤' },
@@ -11,12 +317,6 @@ const INSTRUMENTS = [
   { id: 'keyboard', name: '건반', icon: '🎹' },
   { id: 'drums', name: '드럼', icon: '🥁' },
   { id: 'other', name: '기타 악기', icon: '🎵' },
-]
-
-const UPCOMING_SESSIONS = [
-  { id: 'up1', title: 'Neo Groove Night', time: '오늘 · 22:00', region: 'Seoul Edge', vibe: 'Neo Soul · 92 bpm' },
-  { id: 'up2', title: 'Sunset Funk Bus', time: '내일 · 20:30', region: 'Tokyo Edge', vibe: 'City Funk · 108 bpm' },
-  { id: 'up3', title: 'Nautica Lab', time: '토요일 · 18:00', region: 'LA Edge', vibe: 'Ambient · 76 bpm' },
 ]
 
 function formatRelativeTime(iso: string) {
@@ -98,11 +398,11 @@ export function PostDetail() {
     }
 
     try {
-      const isLiked = await communityApi.toggleLike(post.id, user.id)
+      const { liked, likesCount } = await communityApi.toggleLike(post.id, user.id)
       setPost(prev => prev ? {
         ...prev,
-        likes_count: isLiked ? prev.likes_count + 1 : Math.max(0, prev.likes_count - 1),
-        liked_by_user: isLiked
+        likes_count: likesCount,
+        liked_by_user: liked
       } : null)
     } catch (error) {
       console.error('Failed to toggle like:', error)
@@ -127,6 +427,114 @@ export function PostDetail() {
       alert('댓글 작성에 실패했습니다.')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  // 대댓글 추가
+  const handleReply = async (parentId: string, content: string) => {
+    if (!user || !post) return
+
+    try {
+      const reply = await communityApi.addComment({
+        post_id: post.id,
+        content,
+        parent_id: parentId
+      }, user)
+
+      // 댓글 목록에서 부모 댓글을 찾아 replies에 추가
+      setComments(prev => {
+        const addReplyToComment = (comments: Comment[]): Comment[] => {
+          return comments.map(comment => {
+            if (comment.id === parentId) {
+              return {
+                ...comment,
+                replies: [...(comment.replies || []), reply]
+              }
+            }
+            if (comment.replies && comment.replies.length > 0) {
+              return {
+                ...comment,
+                replies: addReplyToComment(comment.replies)
+              }
+            }
+            return comment
+          })
+        }
+        return addReplyToComment(prev)
+      })
+      setPost(prev => prev ? { ...prev, comments_count: prev.comments_count + 1 } : null)
+    } catch (error) {
+      console.error('Failed to add reply:', error)
+      alert('답글 작성에 실패했습니다.')
+    }
+  }
+
+  // 댓글 수정
+  const handleEditComment = async (commentId: string, content: string) => {
+    try {
+      const updatedComment = await communityApi.updateComment(commentId, content)
+
+      // 댓글 목록에서 해당 댓글을 찾아 업데이트
+      setComments(prev => {
+        const updateCommentInList = (comments: Comment[]): Comment[] => {
+          return comments.map(comment => {
+            if (comment.id === commentId) {
+              return { ...comment, content: updatedComment.content, updated_at: updatedComment.updated_at }
+            }
+            if (comment.replies && comment.replies.length > 0) {
+              return {
+                ...comment,
+                replies: updateCommentInList(comment.replies)
+              }
+            }
+            return comment
+          })
+        }
+        return updateCommentInList(prev)
+      })
+    } catch (error) {
+      console.error('Failed to update comment:', error)
+      alert('댓글 수정에 실패했습니다.')
+    }
+  }
+
+  // 댓글 삭제
+  const handleDeleteComment = async (commentId: string) => {
+    try {
+      await communityApi.deleteComment(commentId)
+
+      // 댓글 목록에서 해당 댓글 제거 (대댓글 포함)
+      setComments(prev => {
+        const removeCommentFromList = (comments: Comment[]): Comment[] => {
+          return comments
+            .filter(comment => comment.id !== commentId)
+            .map(comment => ({
+              ...comment,
+              replies: comment.replies ? removeCommentFromList(comment.replies) : []
+            }))
+        }
+        return removeCommentFromList(prev)
+      })
+
+      // 삭제된 댓글 수 계산 (대댓글 포함)
+      const countDeletedComments = (comments: Comment[], targetId: string): number => {
+        for (const comment of comments) {
+          if (comment.id === targetId) {
+            return 1 + (comment.replies?.length || 0)
+          }
+          if (comment.replies) {
+            const count = countDeletedComments(comment.replies, targetId)
+            if (count > 0) return count
+          }
+        }
+        return 0
+      }
+
+      const deletedCount = countDeletedComments(comments, commentId)
+      setPost(prev => prev ? { ...prev, comments_count: Math.max(0, prev.comments_count - deletedCount) } : null)
+    } catch (error) {
+      console.error('Failed to delete comment:', error)
+      alert('댓글 삭제에 실패했습니다.')
     }
   }
 
@@ -238,8 +646,6 @@ export function PostDetail() {
                   </span>
                   <span style={{ fontWeight: '600', color: 'rgba(255, 255, 255, 0.85)' }}>{post.author_name}</span>
                   <span style={{ margin: '0 6px' }}>·</span>
-                  <span>{post.author_role}</span>
-                  <span style={{ margin: '0 6px' }}>·</span>
                   <span>{formatRelativeTime(post.created_at)}</span>
                 </div>
                 {isAuthor && (
@@ -308,27 +714,42 @@ export function PostDetail() {
                 padding: '20px 28px',
                 borderTop: '1px solid rgba(255, 255, 255, 0.08)',
                 borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                display: 'flex',
+                justifyContent: 'center',
               }}
             >
               <button
                 onClick={handleLike}
                 style={{
-                  background: post.liked_by_user
-                    ? 'linear-gradient(135deg, #ff7ab8 0%, #ff9dd6 100%)'
-                    : 'linear-gradient(135deg, #8d7bff 0%, #a89fff 100%)',
+                  background: 'transparent',
                   border: 'none',
-                  color: '#fff',
-                  padding: '10px 24px',
-                  borderRadius: '8px',
                   cursor: 'pointer',
-                  fontSize: '15px',
-                  fontWeight: '600',
-                  transition: 'transform 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  borderRadius: '20px',
+                  transition: 'all 0.2s',
                 }}
-                onMouseOver={(e) => (e.currentTarget.style.transform = 'scale(1.02)')}
-                onMouseOut={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
+                  e.currentTarget.style.transform = 'scale(1.05)'
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = 'transparent'
+                  e.currentTarget.style.transform = 'scale(1)'
+                }}
               >
-                {post.liked_by_user ? '💖' : '❤️'} 좋아요 {post.likes_count}
+                <span style={{ fontSize: '24px' }}>
+                  {post.liked_by_user ? '❤️' : '🤍'}
+                </span>
+                <span style={{
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: post.liked_by_user ? '#ff7ab8' : 'rgba(255, 255, 255, 0.7)'
+                }}>
+                  {post.likes_count}
+                </span>
               </button>
             </div>
 
@@ -394,27 +815,16 @@ export function PostDetail() {
               <div style={{ padding: '0 28px 28px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {comments.map((comment) => (
-                    <div
+                    <CommentItem
                       key={comment.id}
-                      style={{
-                        padding: '16px',
-                        background: 'rgba(0, 0, 0, 0.25)',
-                        borderRadius: '8px',
-                        border: '1px solid rgba(255, 255, 255, 0.05)',
-                      }}
-                    >
-                      <div style={{ marginBottom: '10px', fontSize: '14px' }}>
-                        <span style={{ fontWeight: '600', color: 'rgba(255, 255, 255, 0.9)' }}>
-                          {comment.author_name}
-                        </span>
-                        <span style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '13px', marginLeft: '8px' }}>
-                          {formatRelativeTime(comment.created_at)}
-                        </span>
-                      </div>
-                      <p style={{ margin: 0, lineHeight: '1.6', fontSize: '15px', color: 'rgba(255, 255, 255, 0.85)' }}>
-                        {comment.content}
-                      </p>
-                    </div>
+                      comment={comment}
+                      user={user}
+                      postId={post.id}
+                      onReply={handleReply}
+                      onEdit={handleEditComment}
+                      onDelete={handleDeleteComment}
+                      formatTime={formatRelativeTime}
+                    />
                   ))}
                 </div>
               </div>
@@ -466,50 +876,6 @@ export function PostDetail() {
                   </span>
                 ))
               )}
-            </div>
-          </div>
-
-          {/* 다가오는 세션 */}
-          <div
-            style={{
-              background: 'rgba(18, 22, 45, 0.8)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '12px',
-              padding: '20px',
-            }}
-          >
-            <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>다가오는 세션</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {UPCOMING_SESSIONS.map((session) => (
-                <div
-                  key={session.id}
-                  onClick={() => navigate('/rooms')}
-                  style={{
-                    padding: '12px',
-                    background: 'rgba(0, 0, 0, 0.2)',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(255, 255, 255, 0.05)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.background = 'rgba(0, 0, 0, 0.3)'
-                    e.currentTarget.style.borderColor = 'rgba(141, 123, 255, 0.3)'
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.background = 'rgba(0, 0, 0, 0.2)'
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.05)'
-                  }}
-                >
-                  <div style={{ fontWeight: '600', fontSize: '14px', marginBottom: '4px' }}>{session.title}</div>
-                  <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '4px' }}>
-                    {session.time}
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
-                    {session.region} · {session.vibe}
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         </div>
