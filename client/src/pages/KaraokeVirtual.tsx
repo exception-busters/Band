@@ -3,7 +3,7 @@ import { FileUpload } from '../components/FileUpload'
 import { ScoreDisplay } from '../components/ScoreDisplay'
 import { MusicPlayer, type InstrumentType } from '../services/MusicPlayer'
 import { getMusicFileUrl, type UploadResponse } from '../services/musicApi'
-import '../styles/Karaoke.css'
+import './Karaoke.css'
 
 /**
  * 가상음악 탭 - MusicXML/MIDI 파일 재생

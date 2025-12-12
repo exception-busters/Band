@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useAudioSettings, AudioPreset, StereoMode } from '../contexts/AudioSettingsContext'
+import { useAudioSettings, AudioPreset } from '../contexts/AudioSettingsContext'
 import './AudioSettings.css'
 
 interface AudioSettingsProps {
@@ -49,7 +49,6 @@ export function AudioSettings({ onClose, isModal = false }: AudioSettingsProps) 
     setEchoCancellation,
     setNoiseSuppression,
     setAutoGainControl,
-    setStereoMode,
     applyPreset,
     refreshDevices,
     testInput,
@@ -237,24 +236,6 @@ export function AudioSettings({ onClose, isModal = false }: AudioSettingsProps) 
               <option value={2}>스테레오 (2채널) - 입력 1+2번 사용</option>
             </select>
           </div>
-          {/* 스테레오 입력 시 출력 모드 선택 */}
-          {settings.channelCount === 2 && (
-            <div className="settings-row">
-              <label>출력 모드</label>
-              <select
-                value={settings.stereoMode}
-                onChange={(e) => setStereoMode(e.target.value as StereoMode)}
-              >
-                <option value="mono">모노로 합치기 (L+R → 센터)</option>
-                <option value="stereo">스테레오 유지 (L/R 분리)</option>
-              </select>
-              <p className="settings-hint">
-                {settings.stereoMode === 'mono'
-                  ? '입력 1번과 2번을 합쳐서 센터로 출력합니다.'
-                  : '입력 1번은 왼쪽, 2번은 오른쪽으로 분리됩니다.'}
-              </p>
-            </div>
-          )}
         </section>
 
         {/* 신호 처리 설정 */}

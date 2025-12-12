@@ -69,13 +69,27 @@ export class MultiTrackPlayer {
     this.clearTracks()
 
     // 모든 스템 로드 (병렬)
-    const loadPromises = Object.entries(stems).map(async ([stemName, fileName]) => {
-      const url = getMusicFileUrl(fileName)
+    const loadPromises = Object.entries(stems).map(async ([stemName, stemUrl]) => {
+      // base64 data URL인 경우 직접 사용, 아니면 getMusicFileUrl 사용
+      const url = stemUrl.startsWith('data:') ? stemUrl : getMusicFileUrl(stemUrl)
 
       try {
-        // 오디오 파일 다운로드
-        const response = await fetch(url)
-        const arrayBuffer = await response.arrayBuffer()
+        let arrayBuffer: ArrayBuffer
+
+        if (stemUrl.startsWith('data:')) {
+          // base64 data URL을 ArrayBuffer로 변환
+          const base64Data = stemUrl.split(',')[1]
+          const binaryString = atob(base64Data)
+          const bytes = new Uint8Array(binaryString.length)
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i)
+          }
+          arrayBuffer = bytes.buffer
+        } else {
+          // 일반 URL인 경우 fetch
+          const response = await fetch(url)
+          arrayBuffer = await response.arrayBuffer()
+        }
 
         // 오디오 버퍼로 디코딩
         const audioBuffer = await this.audioContext!.decodeAudioData(arrayBuffer)

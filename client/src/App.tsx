@@ -25,9 +25,9 @@ import { Profile } from './pages/Profile'
 import { Karaoke } from './pages/Karaoke'
 import { usePremium } from './contexts/PremiumContext'
 import './App.css'
-import './styles/pricing.css'
-import './styles/premium-modal.css'
-import './styles/payment.css'
+import './pages/Pricing.css'
+import './components/PremiumModal.css'
+import './pages/Payment.css'
 
 function AppContent() {
   const { premiumModal, closePremiumModal } = usePremium()

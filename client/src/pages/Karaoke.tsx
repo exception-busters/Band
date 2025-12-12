@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { KaraokeVirtual } from './KaraokeVirtual'
 import { MusicRoom } from './MusicRoom'
-import '../styles/Karaoke.css'
+import './Karaoke.css'
 
 type TabType = 'music-room' | 'virtual'
 

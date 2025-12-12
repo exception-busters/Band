@@ -1,14 +1,12 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { usePremium } from '../contexts/PremiumContext'
 import { AudioSettings } from './AudioSettings'
 import { PlanStatus } from './PlanStatus'
 import './Navigation.css'
 
 export function Navigation() {
   const { user, signOut } = useAuth()
-  const { userPlan } = usePremium()
   const navigate = useNavigate()
   const [showAudioSettings, setShowAudioSettings] = useState(false)
 

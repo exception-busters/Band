@@ -188,7 +188,6 @@ export function RoomDetail() {
   const localPreviewRef = useRef<HTMLAudioElement | null>(null)
   const chatContainerRef = useRef<HTMLDivElement | null>(null)
   const hasJoinedRef = useRef(false)
-  const hasDecrementedRef = useRef(false)
 
 
   // 방 설정 폼 상태

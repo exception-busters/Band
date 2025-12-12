@@ -17,7 +17,6 @@ export interface PlayerState {
 export class MusicPlayer {
   private synth: Tone.PolySynth | null = null
   private midi: Midi | null = null
-  private instrument: InstrumentType = 'piano'
   private parts: Tone.Part[] = []
   private onProgressCallback?: (progress: number) => void
   private progressInterval?: number
@@ -72,8 +71,6 @@ export class MusicPlayer {
       default:
         this.synth = new Tone.PolySynth(Tone.Synth).toDestination()
     }
-
-    this.instrument = instrument
   }
 
   /**
@@ -136,14 +133,15 @@ export class MusicPlayer {
 
       // Tone.Part 생성
       if (allNotes.length > 0 && this.synth) {
-        const part = new Tone.Part((time, note) => {
+        type NoteEvent = { time: number; note: string; duration: number; velocity: number }
+        const part = new Tone.Part<NoteEvent>((time, event) => {
           this.synth?.triggerAttackRelease(
-            note.note,
-            note.duration,
+            event.note,
+            event.duration,
             time,
-            note.velocity
+            event.velocity
           )
-        }, allNotes.map(n => [n.time, n]))
+        }, allNotes as NoteEvent[])
 
         part.loop = false
         this.parts.push(part)

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import '../styles/profile.css'
+import './Profile.css'
 
 type ProfileTab = 'info' | 'follow' | 'plan' | 'theme' | 'support'
 

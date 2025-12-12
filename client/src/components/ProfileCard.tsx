@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import '../styles/profile-card.css'
+import './ProfileCard.css'
 
 interface ProfileCardProps {
   userId: string

@@ -3,6 +3,7 @@
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const DEMUCS_API_URL = import.meta.env.VITE_DEMUCS_API_URL || 'http://localhost:8000'
 
 export interface UploadResponse {
   success: boolean
@@ -106,16 +107,17 @@ export interface SeparationResponse {
 }
 
 /**
- * MP3 파일을 세션별로 분리
+ * MP3 파일을 세션별로 분리 (Demucs API 사용)
  * @param file - MP3 파일
  * @returns 분리된 스템 정보
  */
 export async function separateAudioStems(file: File): Promise<SeparationResponse> {
   try {
     const formData = new FormData()
-    formData.append('file', file)
+    formData.append('audio', file)  // Demucs 서버는 'audio' 필드 사용
+    formData.append('model', 'htdemucs')
 
-    const response = await fetch(`${API_BASE_URL}/api/music/separate-stems`, {
+    const response = await fetch(`${DEMUCS_API_URL}/api/separate`, {
       method: 'POST',
       body: formData
     })
@@ -126,7 +128,13 @@ export async function separateAudioStems(file: File): Promise<SeparationResponse
       throw new Error(data.error || `Separation failed: ${response.status}`)
     }
 
-    return data
+    // Demucs 서버 응답을 클라이언트 형식으로 변환
+    return {
+      success: data.success,
+      stems: data.stems,
+      availableStems: data.stems ? Object.keys(data.stems) : [],
+      message: `Separated using ${data.model}`
+    }
   } catch (error) {
     console.error('Separation error:', error)
     return {

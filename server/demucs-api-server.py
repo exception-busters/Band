@@ -12,6 +12,7 @@ import shutil
 from pathlib import Path
 import subprocess
 import json
+import base64
 
 app = FastAPI(title="DEMUCS API", version="1.0.0")
 
@@ -59,29 +60,31 @@ async def separate_audio(
         # 출력 디렉토리
         output_dir = os.path.join(temp_dir, "separated")
 
-        # demucs 실행
+        # demucs_separate.py 스크립트 사용 (soundfile 백엔드로 torchcodec 문제 회피)
+        import sys
+        python_cmd = sys.executable
+        script_path = os.path.join(os.path.dirname(__file__), "demucs_separate.py")
+
         cmd = [
-            "python", "-m", "demucs.separate",
-            "-n", model,
-            "-o", output_dir,
-            "--two-stems", "vocals",  # vocals와 no_vocals로 분리
-            input_path
+            python_cmd,
+            script_path,
+            input_path,
+            output_dir
         ]
-
-        if split:
-            cmd.append("--split")
-
-        if shifts > 1:
-            cmd.extend(["--shifts", str(shifts)])
 
         try:
             # demucs 실행
+            print(f"[DEMUCS] Running command: {' '.join(cmd)}")
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=600  # 10분 타임아웃
             )
+
+            print(f"[DEMUCS] Return code: {result.returncode}")
+            print(f"[DEMUCS] stdout: {result.stdout}")
+            print(f"[DEMUCS] stderr: {result.stderr}")
 
             if result.returncode != 0:
                 return JSONResponse(
@@ -94,23 +97,32 @@ async def separate_audio(
 
             # 출력 파일 찾기
             song_name = Path(audio.filename).stem
-            separated_path = os.path.join(output_dir, model, song_name)
+            separated_path = os.path.join(output_dir, "htdemucs_6s", song_name)
 
-            # 파일 목록
+            # 파일 목록 (base64로 인코딩하여 반환)
             stems = {}
+            print(f"[DEMUCS] Looking for files in: {separated_path}")
             if os.path.exists(separated_path):
+                print(f"[DEMUCS] Files found: {os.listdir(separated_path)}")
                 for file in os.listdir(separated_path):
-                    if file.endswith(".wav"):
-                        stem_name = file.replace(".wav", "")
+                    if file.endswith(".mp3") or file.endswith(".wav"):
+                        stem_name = file.replace(".mp3", "").replace(".wav", "")
                         file_path = os.path.join(separated_path, file)
 
-                        # 파일 읽기 및 base64 인코딩 (실제로는 파일 URL 반환)
-                        # 여기서는 파일이 있다는 정보만 반환
-                        stems[stem_name] = f"/files/{song_name}/{file}"
+                        # 파일을 base64로 인코딩
+                        with open(file_path, "rb") as f:
+                            file_data = f.read()
+                            b64_data = base64.b64encode(file_data).decode("utf-8")
+                            mime_type = "audio/mpeg" if file.endswith(".mp3") else "audio/wav"
+                            stems[stem_name] = f"data:{mime_type};base64,{b64_data}"
+                            print(f"[DEMUCS] Encoded {stem_name}: {len(file_data)} bytes")
+            else:
+                print(f"[DEMUCS] Path does not exist: {separated_path}")
 
             return {
                 "success": True,
                 "stems": stems,
+                "availableStems": list(stems.keys()),
                 "model": model,
                 "song_name": song_name
             }
