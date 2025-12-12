@@ -39,6 +39,7 @@ export function Navigation() {
         <Link to="/rooms">합주실</Link>
         <Link to="/recording">녹음</Link>
         <Link to="/mix">Mix Lab</Link>
+        <Link to="/virtual-instruments">가상악기</Link>
         <Link to="/community">커뮤니티</Link>
         <Link to="/pricing">요금제</Link>
       </div>

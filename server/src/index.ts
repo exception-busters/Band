@@ -6,6 +6,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import paymentRoutes from './routes/payment';
+import ocrRoutes from './routes/ocr';
 
 // 환경변수 로드
 dotenv.config();
@@ -20,6 +21,9 @@ app.use(express.json());
 
 // 결제 API 라우트
 app.use('/api/payment', paymentRoutes);
+
+// OCR API 라우트
+app.use('/api/ocr', ocrRoutes);
 
 // 기본 라우트
 app.get('/', (req, res) => {

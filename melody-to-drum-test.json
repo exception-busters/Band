@@ -1,0 +1,123 @@
+{
+  "title": "Melody to Drum Conversion Test",
+  "tempo": 120,
+  "instruments": ["drums"],
+  "measures": [
+    {
+      "number": 1,
+      "timeSignature": "4/4",
+      "notes": [
+        {
+          "pitch": "C4",
+          "duration": 1,
+          "startTime": 0,
+          "velocity": 100,
+          "instrument": "drums",
+          "comment": "C4 → kick (자동 변환)"
+        },
+        {
+          "pitch": "D4",
+          "duration": 1,
+          "startTime": 1,
+          "velocity": 90,
+          "instrument": "drums",
+          "comment": "D4 → snare (자동 변환)"
+        },
+        {
+          "pitch": "E4",
+          "duration": 0.5,
+          "startTime": 2,
+          "velocity": 70,
+          "instrument": "drums",
+          "comment": "E4 → hihat (자동 변환)"
+        },
+        {
+          "pitch": "E4",
+          "duration": 0.5,
+          "startTime": 2.5,
+          "velocity": 75,
+          "instrument": "drums",
+          "comment": "E4 → hihat (자동 변환)"
+        },
+        {
+          "pitch": "G4",
+          "duration": 1,
+          "startTime": 3,
+          "velocity": 95,
+          "instrument": "drums",
+          "comment": "G4 → snare (자동 변환)"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "timeSignature": "4/4",
+      "notes": [
+        {
+          "pitch": "F5",
+          "duration": 0.5,
+          "startTime": 0,
+          "velocity": 100,
+          "instrument": "drums",
+          "comment": "F5 → kick (옥타브 무시)"
+        },
+        {
+          "pitch": "A3",
+          "duration": 0.5,
+          "startTime": 0.5,
+          "velocity": 80,
+          "instrument": "drums",
+          "comment": "A3 → hihat (옥타브 무시)"
+        },
+        {
+          "pitch": "B4",
+          "duration": 1,
+          "startTime": 1,
+          "velocity": 110,
+          "instrument": "drums",
+          "comment": "B4 → snare (자동 변환)"
+        },
+        {
+          "pitch": "C#4",
+          "duration": 0.25,
+          "startTime": 2,
+          "velocity": 85,
+          "instrument": "drums",
+          "comment": "C#4 → kick (샤프 무시)"
+        },
+        {
+          "pitch": "Bb3",
+          "duration": 0.25,
+          "startTime": 2.25,
+          "velocity": 90,
+          "instrument": "drums",
+          "comment": "Bb3 → snare (플랫 무시)"
+        },
+        {
+          "pitch": "D#5",
+          "duration": 0.25,
+          "startTime": 2.5,
+          "velocity": 85,
+          "instrument": "drums",
+          "comment": "D#5 → snare (샤프 무시)"
+        },
+        {
+          "pitch": "Ab4",
+          "duration": 0.25,
+          "startTime": 2.75,
+          "velocity": 80,
+          "instrument": "drums",
+          "comment": "Ab4 → hihat (플랫 무시)"
+        },
+        {
+          "pitch": "C6",
+          "duration": 1,
+          "startTime": 3,
+          "velocity": 100,
+          "instrument": "drums",
+          "comment": "C6 → kick (높은 옥타브도 변환)"
+        }
+      ]
+    }
+  ]
+}

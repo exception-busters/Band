@@ -1,0 +1,91 @@
+{
+  "title": "Drum Test Pattern - Wikipedia Commons Samples",
+  "tempo": 120,
+  "instruments": ["drums"],
+  "measures": [
+    {
+      "number": 1,
+      "timeSignature": "4/4",
+      "notes": [
+        {
+          "pitch": "kick",
+          "duration": 1,
+          "startTime": 0,
+          "velocity": 100,
+          "instrument": "drums",
+          "midi": 36,
+          "comment": "MIDI 36 → kick"
+        },
+        {
+          "pitch": "snare",
+          "duration": 1,
+          "startTime": 1,
+          "velocity": 90,
+          "instrument": "drums",
+          "midi": 38,
+          "comment": "MIDI 38 → snare"
+        },
+        {
+          "pitch": "hihat_closed",
+          "duration": 0.5,
+          "startTime": 2,
+          "velocity": 70,
+          "instrument": "drums",
+          "midi": 42,
+          "comment": "MIDI 42 → hihat_closed"
+        },
+        {
+          "pitch": "hihat_closed",
+          "duration": 0.5,
+          "startTime": 2.5,
+          "velocity": 70,
+          "instrument": "drums",
+          "midi": 42,
+          "comment": "MIDI 42 → hihat_closed"
+        },
+        {
+          "pitch": "kick",
+          "duration": 1,
+          "startTime": 3,
+          "velocity": 100,
+          "instrument": "drums",
+          "midi": 36,
+          "comment": "MIDI 36 → kick"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "timeSignature": "4/4",
+      "notes": [
+        {
+          "pitch": "tom",
+          "duration": 1,
+          "startTime": 0,
+          "velocity": 80,
+          "instrument": "drums",
+          "midi": 45,
+          "comment": "MIDI 45 → tom"
+        },
+        {
+          "pitch": "hihat_open",
+          "duration": 1,
+          "startTime": 1,
+          "velocity": 85,
+          "instrument": "drums",
+          "midi": 46,
+          "comment": "MIDI 46 → hihat_open"
+        },
+        {
+          "pitch": "crash",
+          "duration": 2,
+          "startTime": 2,
+          "velocity": 110,
+          "instrument": "drums",
+          "midi": 49,
+          "comment": "MIDI 49 → crash"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "title": "Measure Calculation Test",
+  "tempo": 120,
+  "instruments": ["piano"],
+  "measures": [
+    {
+      "number": 1,
+      "timeSignature": "4/4",
+      "notes": [
+        {
+          "pitch": "C4",
+          "duration": 1,
+          "startTime": 0,
+          "velocity": 80,
+          "instrument": "piano",
+          "comment": "마디 1, 박자 1"
+        },
+        {
+          "pitch": "D4",
+          "duration": 1,
+          "startTime": 1,
+          "velocity": 80,
+          "instrument": "piano",
+          "comment": "마디 1, 박자 2"
+        },
+        {
+          "pitch": "E4",
+          "duration": 1,
+          "startTime": 2,
+          "velocity": 80,
+          "instrument": "piano",
+          "comment": "마디 1, 박자 3"
+        },
+        {
+          "pitch": "F4",
+          "duration": 1,
+          "startTime": 3,
+          "velocity": 80,
+          "instrument": "piano",
+          "comment": "마디 1, 박자 4"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "timeSignature": "4/4",
+      "notes": [
+        {
+          "pitch": "G4",
+          "duration": 1,
+          "startTime": 4,
+          "velocity": 80,
+          "instrument": "piano",
+          "comment": "마디 2, 박자 1"
+        },
+        {
+          "pitch": "A4",
+          "duration": 1,
+          "startTime": 5,
+          "velocity": 80,
+          "instrument": "piano",
+          "comment": "마디 2, 박자 2"
+        },
+        {
+          "pitch": "B4",
+          "duration": 1,
+          "startTime": 6,
+          "velocity": 80,
+          "instrument": "piano",
+          "comment": "마디 2, 박자 3"
+        },
+        {
+          "pitch": "C5",
+          "duration": 1,
+          "startTime": 7,
+          "velocity": 80,
+          "instrument": "piano",
+          "comment": "마디 2, 박자 4"
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "timeSignature": "4/4",
+      "notes": [
+        {
+          "pitch": "D5",
+          "duration": 1,
+          "startTime": 8,
+          "velocity": 80,
+          "instrument": "piano",
+          "comment": "마디 3, 박자 1"
+        },
+        {
+          "pitch": "E5",
+          "duration": 1,
+          "startTime": 9,
+          "velocity": 80,
+          "instrument": "piano",
+          "comment": "마디 3, 박자 2"
+        },
+        {
+          "pitch": "F5",
+          "duration": 1,
+          "startTime": 10,
+          "velocity": 80,
+          "instrument": "piano",
+          "comment": "마디 3, 박자 3"
+        },
+        {
+          "pitch": "G5",
+          "duration": 1,
+          "startTime": 11,
+          "velocity": 80,
+          "instrument": "piano",
+          "comment": "마디 3, 박자 4"
+        }
+      ]
+    }
+  ]
+}

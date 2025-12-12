@@ -18,11 +18,13 @@ import { Pricing } from './pages/Pricing'
 import { Payment } from './pages/Payment'
 import { PaymentSuccess } from './pages/PaymentSuccess'
 import { PaymentFail } from './pages/PaymentFail'
+import { VirtualInstruments } from './pages/VirtualInstruments'
 import { usePremium } from './contexts/PremiumContext'
 import './App.css'
 import './styles/pricing.css'
 import './styles/premium-modal.css'
 import './styles/payment.css'
+import './styles/virtual-instruments.css'
 
 function AppContent() {
   const { premiumModal, closePremiumModal } = usePremium()
@@ -45,6 +47,7 @@ function AppContent() {
           <Route path="/payment" element={<Payment />} />
           <Route path="/payment/success" element={<PaymentSuccess />} />
           <Route path="/payment/fail" element={<PaymentFail />} />
+          <Route path="/virtual-instruments" element={<VirtualInstruments />} />
         </Routes>
       </main>
       <footer className="app-footer">

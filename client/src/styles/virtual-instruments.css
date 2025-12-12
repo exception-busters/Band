@@ -1,0 +1,1144 @@
+/* Virtual Instruments Page Styles */
+.virtual-instruments-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #02040c 0%, #0a0f1c 100%);
+  padding: 2rem;
+  color: #f5f7ff;
+}
+
+.virtual-instruments-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* 헤더 */
+.page-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.page-header h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(120deg, #7b7bff, #ff7ab8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.page-header p {
+  font-size: 1.125rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+/* 메인 콘텐츠 */
+.main-content {
+  display: grid;
+  gap: 2rem;
+}
+
+/* 섹션 공통 스타일 */
+section {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 2rem;
+  backdrop-filter: blur(10px);
+}
+
+section h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  color: #f5f7ff;
+}
+
+section h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: #f5f7ff;
+}
+
+/* 파일 업로드 섹션 */
+.upload-area {
+  border: 2px dashed rgba(123, 123, 255, 0.3);
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  text-align: center;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.upload-area:hover {
+  border-color: rgba(123, 123, 255, 0.5);
+  background: rgba(123, 123, 255, 0.05);
+}
+
+.upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.upload-icon {
+  font-size: 3rem;
+  opacity: 0.7;
+}
+
+.upload-button {
+  background: linear-gradient(135deg, #7b7bff 0%, #ff7ab8 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.upload-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(123, 123, 255, 0.4);
+}
+
+/* OCR 진행 상태 */
+.ocr-progress {
+  margin-top: 1.5rem;
+  text-align: center;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7b7bff, #ff7ab8);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* 악기 선택 섹션 */
+.instrument-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.instrument-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.instrument-card:hover {
+  border-color: rgba(123, 123, 255, 0.4);
+  background: rgba(123, 123, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+.instrument-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.instrument-card h3 {
+  margin-bottom: 1rem;
+  font-size: 1.125rem;
+}
+
+.instrument-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.instrument-checkbox input[type="checkbox"] {
+  display: none;
+}
+
+.checkmark {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.checkmark:hover {
+  border-color: rgba(123, 123, 255, 0.6);
+  background: rgba(123, 123, 255, 0.1);
+}
+
+.instrument-checkbox input[type="checkbox"]:checked + .checkmark {
+  background: #7b7bff;
+  border-color: #7b7bff;
+}
+
+.instrument-checkbox input[type="checkbox"]:checked + .checkmark::after {
+  content: '✓';
+  color: #ffffff;
+  font-weight: bold;
+  font-size: 1rem;
+}
+
+/* 재생 제어 섹션 */
+.player-section {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.tempo-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tempo-control label {
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.tempo-slider {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.tempo-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(135deg, #7b7bff, #ff7ab8);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.tempo-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(135deg, #7b7bff, #ff7ab8);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.playback-controls {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.control-button {
+  width: 60px;
+  height: 60px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: #f5f7ff;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.control-button:hover:not(:disabled) {
+  background: rgba(123, 123, 255, 0.2);
+  transform: scale(1.05);
+}
+
+.control-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.play-button {
+  background: linear-gradient(135deg, #7b7bff, #ff7ab8);
+}
+
+.play-button:hover:not(:disabled) {
+  box-shadow: 0 8px 25px rgba(123, 123, 255, 0.4);
+}
+
+.progress-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.playback-progress .progress-bar {
+  height: 6px;
+  cursor: pointer;
+}
+
+.current-measure {
+  text-align: center;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+/* 안내사항 섹션 */
+.info-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.info-section li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+}
+
+.info-section li:last-child {
+  border-bottom: none;
+}
+
+.info-section li::before {
+  content: '•';
+  color: #7b7bff;
+  font-weight: bold;
+  margin-right: 0.5rem;
+}
+
+/* FileUpload 컴포넌트 스타일 */
+.file-upload-container {
+  display: grid;
+  gap: 1rem;
+}
+
+.upload-area.drag-over {
+  border-color: #7b7bff;
+  background: rgba(123, 123, 255, 0.1);
+}
+
+.upload-area.uploading {
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.upload-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.progress-text {
+  font-weight: 600;
+  color: #7b7bff;
+}
+
+.upload-error {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #fca5a5;
+}
+
+.error-icon {
+  font-size: 1.25rem;
+}
+
+.upload-info {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
+.upload-info p {
+  margin: 0.25rem 0;
+}
+
+/* InstrumentSelector 컴포넌트 스타일 */
+.instrument-selector {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.instrument-selector p {
+  color: #94a3b8;
+  margin: 0;
+}
+
+.instrument-card.selected {
+  border-color: #7b7bff;
+  background: rgba(123, 123, 255, 0.15);
+}
+
+.instrument-card.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.instrument-description {
+  color: #94a3b8;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.selection-hint,
+.selection-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+.selection-hint {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+}
+
+.selection-summary {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #4ade80;
+}
+
+/* AudioPlayer 컴포넌트 스타일 */
+.audio-player {
+  display: grid;
+  gap: 2rem;
+}
+
+.tempo-slider-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.tempo-min,
+.tempo-max {
+  color: #94a3b8;
+  font-size: 0.875rem;
+  min-width: 2rem;
+  text-align: center;
+}
+
+.tempo-presets {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.preset-button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  color: #cbd5e1;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.preset-button:hover:not(:disabled) {
+  background: rgba(123, 123, 255, 0.2);
+  border-color: rgba(123, 123, 255, 0.4);
+}
+
+.preset-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.time-display {
+  display: flex;
+  justify-content: space-between;
+  color: #94a3b8;
+  font-size: 0.875rem;
+  font-family: monospace;
+}
+
+.playback-progress {
+  cursor: pointer;
+}
+
+.measure-display {
+  text-align: center;
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+.playback-status {
+  display: flex;
+  justify-content: center;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.status-indicator.playing {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #4ade80;
+}
+
+.status-indicator.paused {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+}
+
+.status-indicator.stopped {
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #94a3b8;
+}
+
+.status-indicator.loading {
+  background: rgba(123, 123, 255, 0.1);
+  border: 1px solid rgba(123, 123, 255, 0.3);
+  color: #7b7bff;
+}
+
+.keyboard-shortcuts {
+  text-align: center;
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+/* OCRProgress 컴포넌트 스타일 */
+.ocr-progress {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-top: 1rem;
+}
+
+.ocr-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.ocr-icon {
+  font-size: 2rem;
+}
+
+.ocr-info {
+  flex: 1;
+}
+
+.ocr-info h3 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.125rem;
+}
+
+.file-name {
+  color: #94a3b8;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.cancel-button {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  padding: 0.5rem;
+  color: #fca5a5;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancel-button:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.ocr-content {
+  display: grid;
+  gap: 1rem;
+}
+
+.ocr-description {
+  color: #cbd5e1;
+  margin: 0;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+}
+
+.progress-percentage {
+  font-weight: 600;
+  color: #7b7bff;
+}
+
+.progress-eta {
+  color: #94a3b8;
+}
+
+.completion-info {
+  text-align: center;
+  padding: 1rem;
+}
+
+.success-animation {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.error-info {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.error-message {
+  color: #fca5a5;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.error-suggestions h4 {
+  color: #f5f7ff;
+  margin-bottom: 0.5rem;
+}
+
+.error-suggestions ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.error-suggestions li {
+  color: #cbd5e1;
+  font-size: 0.875rem;
+  padding: 0.25rem 0;
+}
+
+.error-suggestions li::before {
+  content: '→';
+  color: #fca5a5;
+  margin-right: 0.5rem;
+}
+
+.processing-steps {
+  margin-top: 1rem;
+}
+
+.step-list {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  padding: 0.75rem 0.5rem;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.step.active {
+  background: rgba(123, 123, 255, 0.1);
+  border: 1px solid rgba(123, 123, 255, 0.3);
+}
+
+.step.completed {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.step-icon {
+  font-size: 1.25rem;
+}
+
+.step-text {
+  font-size: 0.75rem;
+  text-align: center;
+  color: #94a3b8;
+}
+
+.step.active .step-text {
+  color: #7b7bff;
+  font-weight: 600;
+}
+
+.step.completed .step-text {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+/* 오류 섹션 */
+.error-section {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.error-message {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.retry-button {
+  background: rgba(123, 123, 255, 0.2);
+  border: 1px solid rgba(123, 123, 255, 0.4);
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  color: #7b7bff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.retry-button:hover {
+  background: rgba(123, 123, 255, 0.3);
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .virtual-instruments-page {
+    padding: 1rem;
+  }
+
+  .page-header h1 {
+    font-size: 2rem;
+  }
+
+  section {
+    padding: 1.5rem;
+  }
+
+  .instrument-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .upload-area {
+    padding: 2rem 1rem;
+  }
+
+  .playback-controls {
+    gap: 0.5rem;
+  }
+
+  .control-button {
+    width: 50px;
+    height: 50px;
+    font-size: 1.25rem;
+  }
+
+  .tempo-presets {
+    flex-wrap: wrap;
+  }
+
+  .step-list {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .step {
+    flex-direction: row;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .step-text {
+    text-align: left;
+  }
+
+  .error-message {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header h1 {
+    font-size: 1.75rem;
+  }
+
+  .instrument-icon {
+    font-size: 2.5rem;
+  }
+
+  .upload-icon {
+    font-size: 2.5rem;
+  }
+}/* 현재 재생 중
+인 음표 표시 */
+.current-note-display {
+  background: linear-gradient(135deg, rgba(123, 123, 255, 0.15), rgba(255, 122, 184, 0.15));
+  border: 2px solid rgba(123, 123, 255, 0.3);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  animation: noteGlow 2s ease-in-out infinite alternate;
+}
+
+.current-note-display h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  color: #7b7bff;
+  text-align: center;
+}
+
+.note-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.note-info > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.note-label {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  margin-bottom: 0.25rem;
+}
+
+.note-value {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #f5f7ff;
+}
+
+.pitch-display {
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
+  color: #7b7bff !important;
+  text-shadow: 0 0 10px rgba(123, 123, 255, 0.5);
+}
+
+.note-visualization {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.musical-note-icon {
+  font-size: 3rem;
+  color: #ff7ab8;
+  animation: noteFloat 1.5s ease-in-out infinite;
+  text-shadow: 0 0 20px rgba(255, 122, 184, 0.6);
+}
+
+@keyframes noteGlow {
+  0% {
+    box-shadow: 0 0 20px rgba(123, 123, 255, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 30px rgba(255, 122, 184, 0.4);
+  }
+}
+
+@keyframes noteFloat {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-5px) scale(1.1);
+  }
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .note-info {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  
+  .current-note-display {
+    padding: 1rem;
+  }
+  
+  .musical-note-icon {
+    font-size: 2rem;
+  }
+  
+  .pitch-display {
+    font-size: 1.25rem !important;
+  }
+}/* 기
+타 전용 스타일 */
+.instrument-card[data-instrument="guitar"] {
+  background: linear-gradient(135deg, rgba(139, 69, 19, 0.15), rgba(160, 82, 45, 0.15));
+  border-color: rgba(139, 69, 19, 0.3);
+}
+
+.instrument-card[data-instrument="guitar"].selected {
+  background: linear-gradient(135deg, rgba(139, 69, 19, 0.25), rgba(160, 82, 45, 0.25));
+  border-color: rgba(139, 69, 19, 0.6);
+  box-shadow: 0 0 20px rgba(139, 69, 19, 0.4);
+}
+
+.instrument-card[data-instrument="guitar"] .instrument-icon {
+  filter: drop-shadow(0 0 10px rgba(139, 69, 19, 0.5));
+}
+
+/* 기타 재생 중 현재 음표 표시 개선 */
+.current-note-display[data-instrument="guitar"] {
+  background: linear-gradient(135deg, rgba(139, 69, 19, 0.15), rgba(160, 82, 45, 0.15));
+  border-color: rgba(139, 69, 19, 0.4);
+}
+
+.current-note-display[data-instrument="guitar"] .pitch-display {
+  color: #8B4513 !important;
+  text-shadow: 0 0 10px rgba(139, 69, 19, 0.5);
+}
+
+.current-note-display[data-instrument="guitar"] .musical-note-icon {
+  color: #A0522D;
+  text-shadow: 0 0 20px rgba(160, 82, 45, 0.6);
+}
+
+/* 기타 코드 표시 */
+.guitar-chord-display {
+  background: linear-gradient(135deg, rgba(139, 69, 19, 0.1), rgba(160, 82, 45, 0.1));
+  border: 2px solid rgba(139, 69, 19, 0.3);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  text-align: center;
+  animation: guitarGlow 3s ease-in-out infinite alternate;
+}
+
+.guitar-chord-name {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #8B4513;
+  margin-bottom: 1rem;
+  text-shadow: 0 0 10px rgba(139, 69, 19, 0.5);
+}
+
+.guitar-fretboard {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.5rem;
+  margin: 1rem 0;
+  justify-items: center;
+}
+
+.guitar-string {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(139, 69, 19, 0.2);
+  border: 2px solid rgba(139, 69, 19, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: bold;
+  color: #8B4513;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.guitar-string.pressed {
+  background: linear-gradient(135deg, rgba(139, 69, 19, 0.8), rgba(160, 82, 45, 0.8));
+  color: white;
+  transform: scale(1.1);
+  box-shadow: 0 0 15px rgba(139, 69, 19, 0.6);
+}
+
+.guitar-string:hover {
+  transform: scale(1.05);
+  border-color: rgba(139, 69, 19, 0.6);
+}
+
+.chord-notes {
+  margin-top: 1rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.chord-notes small {
+  font-size: 0.875rem;
+}
+
+@keyframes guitarGlow {
+  0% {
+    box-shadow: 0 0 20px rgba(139, 69, 19, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 30px rgba(160, 82, 45, 0.4);
+  }
+}
+
+/* 기타 줄 라벨 */
+.guitar-fretboard::before {
+  content: "6현(E) 5현(A) 4현(D) 3현(G) 2현(B) 1현(E)";
+  grid-column: 1 / -1;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-bottom: 0.5rem;
+  display: none; /* 필요시 표시 */
+}
+
+/* 악기 로딩 상태 표시 */
+.instrument-loading-status {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+}
+
+.instrument-loading-status h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.125rem;
+  color: #f5f7ff;
+  text-align: center;
+}
+
+.loading-indicators {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.instrument-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.instrument-status.loading {
+  background: rgba(123, 123, 255, 0.1);
+  border: 1px solid rgba(123, 123, 255, 0.3);
+  animation: loadingPulse 2s ease-in-out infinite;
+}
+
+.instrument-status.loaded {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.instrument-status .instrument-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.instrument-status .instrument-name {
+  font-weight: 600;
+  color: #f5f7ff;
+  flex: 1;
+}
+
+.instrument-status .loading-indicator {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.instrument-status.loading .loading-indicator {
+  color: #7b7bff;
+}
+
+.instrument-status.loaded .loading-indicator {
+  color: #4ade80;
+}
+
+@keyframes loadingPulse {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+/* 기타 전용 로딩 상태 */
+.instrument-status.loading .instrument-icon {
+  animation: instrumentSpin 2s linear infinite;
+}
+
+.instrument-status.loaded .instrument-icon {
+  animation: instrumentBounce 0.6s ease-out;
+}
+
+@keyframes instrumentSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes instrumentBounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-10px);
+  }
+  60% {
+    transform: translateY(-5px);
+  }
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .loading-indicators {
+    grid-template-columns: 1fr;
+  }
+  
+  .instrument-status {
+    padding: 0.75rem;
+  }
+  
+  .instrument-status .instrument-icon {
+    font-size: 1.25rem;
+  }
+}

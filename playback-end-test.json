@@ -1,0 +1,45 @@
+{
+  "title": "Playback End Test - Short Song",
+  "tempo": 120,
+  "instruments": ["piano"],
+  "measures": [
+    {
+      "number": 1,
+      "timeSignature": "4/4",
+      "notes": [
+        {
+          "pitch": "C4",
+          "duration": 1,
+          "startTime": 0,
+          "velocity": 80,
+          "instrument": "piano",
+          "comment": "Beat 1"
+        },
+        {
+          "pitch": "E4",
+          "duration": 1,
+          "startTime": 1,
+          "velocity": 80,
+          "instrument": "piano",
+          "comment": "Beat 2"
+        },
+        {
+          "pitch": "G4",
+          "duration": 1,
+          "startTime": 2,
+          "velocity": 80,
+          "instrument": "piano",
+          "comment": "Beat 3"
+        },
+        {
+          "pitch": "C5",
+          "duration": 1,
+          "startTime": 3,
+          "velocity": 80,
+          "instrument": "piano",
+          "comment": "Beat 4 - Last note"
+        }
+      ]
+    }
+  ]
+}

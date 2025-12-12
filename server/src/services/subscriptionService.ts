@@ -17,7 +17,7 @@ class SubscriptionService {
       createdAt: existingUser?.createdAt || new Date(),
       updatedAt: new Date()
     }
-    
+
     this.users.set(user.id, user)
     return user
   }
@@ -29,9 +29,9 @@ class SubscriptionService {
 
   // 구독 생성
   createSubscription(
-    userId: string, 
-    planType: UserPlan, 
-    paymentKey: string, 
+    userId: string,
+    planType: UserPlan,
+    paymentKey: string,
     amount: number
   ): Subscription {
     const subscriptionId = `sub_${userId}_${Date.now()}`
@@ -72,7 +72,7 @@ class SubscriptionService {
   getUserActiveSubscription(userId: string): Subscription | null {
     for (const subscription of this.subscriptions.values()) {
       if (
-        subscription.userId === userId && 
+        subscription.userId === userId &&
         subscription.status === 'active' &&
         subscription.endDate > new Date()
       ) {
@@ -105,7 +105,7 @@ class SubscriptionService {
     const now = new Date()
     for (const subscription of this.subscriptions.values()) {
       if (
-        subscription.status === 'active' && 
+        subscription.status === 'active' &&
         subscription.endDate <= now
       ) {
         subscription.status = 'expired'
