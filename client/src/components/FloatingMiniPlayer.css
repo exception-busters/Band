@@ -118,9 +118,10 @@
   border-left: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.control-btn {
+.mini-player-controls .control-btn {
   width: 32px;
   height: 32px;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -133,30 +134,30 @@
   transition: all 0.2s;
 }
 
-.control-btn:hover {
+.mini-player-controls .control-btn:hover {
   background: rgba(255, 255, 255, 0.2);
   transform: scale(1.1);
 }
 
-.control-btn.mic {
+.mini-player-controls .control-btn.mic {
   background: rgba(74, 222, 128, 0.2);
   position: relative;
 }
 
-.control-btn.mic:hover {
+.mini-player-controls .control-btn.mic:hover {
   background: rgba(74, 222, 128, 0.4);
 }
 
-.control-btn.mic.muted {
+.mini-player-controls .control-btn.mic.muted {
   background: rgba(239, 68, 68, 0.2);
 }
 
-.control-btn.mic.muted:hover {
+.mini-player-controls .control-btn.mic.muted:hover {
   background: rgba(239, 68, 68, 0.4);
 }
 
 /* 마이크 음소거 시 대각선 빨간 줄 */
-.control-btn.mic.muted::after {
+.mini-player-controls .control-btn.mic.muted::after {
   content: '';
   position: absolute;
   top: 50%;
@@ -168,27 +169,27 @@
   border-radius: 1px;
 }
 
-.control-btn.mute {
+.mini-player-controls .control-btn.mute {
   background: rgba(74, 222, 128, 0.2);
 }
 
-.control-btn.mute:hover {
+.mini-player-controls .control-btn.mute:hover {
   background: rgba(74, 222, 128, 0.4);
 }
 
-.control-btn.mute.muted {
+.mini-player-controls .control-btn.mute.muted {
   background: rgba(239, 68, 68, 0.2);
 }
 
-.control-btn.mute.muted:hover {
+.mini-player-controls .control-btn.mute.muted:hover {
   background: rgba(239, 68, 68, 0.4);
 }
 
-.control-btn.exit {
+.mini-player-controls .control-btn.exit {
   background: rgba(239, 68, 68, 0.2);
 }
 
-.control-btn.exit:hover {
+.mini-player-controls .control-btn.exit:hover {
   background: rgba(239, 68, 68, 0.4);
 }
 
@@ -232,7 +233,7 @@
     font-size: 16px;
   }
 
-  .control-btn {
+  .mini-player-controls .control-btn {
     width: 28px;
     height: 28px;
     font-size: 12px;
