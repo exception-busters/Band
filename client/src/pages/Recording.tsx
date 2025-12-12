@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import './Recording.css'
 
 type RecordingTake = {
   id: string
@@ -181,9 +180,20 @@ export function Recording() {
               <div className="preview-card">
                 <h3>녹음 미리듣기</h3>
                 <audio controls src={recordingUrl} />
-                <a download="bandspace-sketch.webm" href={recordingUrl} className="download-btn">
-                  💾 오디오 저장
-                </a>
+                <div className="preview-actions">
+                  <a download="bandspace-sketch.webm" href={recordingUrl} className="download-btn">
+                    💾 로컬 저장
+                  </a>
+                  <button
+                    className="cloud-save-btn"
+                    onClick={() => {
+                      // TODO: 클라우드 저장 로직
+                      console.log('Saving to cloud...')
+                    }}
+                  >
+                    ☁️ 클라우드 저장
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -220,9 +230,20 @@ export function Recording() {
                     </small>
                   </div>
                   <audio controls src={take.url} />
-                  <a download={`${take.label}.webm`} href={take.url} className="take-download">
-                    다운로드
-                  </a>
+                  <div className="take-actions">
+                    <a download={`${take.label}.webm`} href={take.url} className="take-download">
+                      다운로드
+                    </a>
+                    <button
+                      className="take-share"
+                      onClick={() => {
+                        // TODO: 공유 로직
+                        console.log('Sharing take...')
+                      }}
+                    >
+                      공유
+                    </button>
+                  </div>
                 </article>
               ))
             )}

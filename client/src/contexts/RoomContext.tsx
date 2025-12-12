@@ -34,10 +34,10 @@ export interface PeerInstrument {
 
 // 피어 네트워크 상태
 export interface PeerNetworkStats {
-  audioLatency: number | null   // 실제 오디오 지연 (RTT/2 + jitterBuffer) in ms
-  jitter: number | null         // 지터 in ms
-  packetsLost: number           // 패킷 손실 수
-  packetLossRate: number        // 패킷 손실률 (%)
+  latency: number | null      // RTT in ms
+  jitter: number | null       // 지터 in ms
+  packetsLost: number         // 패킷 손실 수
+  packetLossRate: number      // 패킷 손실률 (%)
   quality: 'excellent' | 'good' | 'fair' | 'poor' | 'unknown'
 }
 
@@ -46,15 +46,6 @@ export interface PerformRequest {
   oderId: string
   nickname: string
   instrument: string
-  timestamp: number
-}
-
-// 악기 변경 요청
-export interface InstrumentChangeRequest {
-  oderId: string
-  nickname: string
-  currentInstrument: string
-  newInstrument: string
   timestamp: number
 }
 
@@ -71,14 +62,12 @@ export interface Recording {
   mimeType: string
 }
 
-// 네트워크 품질 판정 함수 (오디오 지연 기준)
-function getNetworkQuality(audioLatency: number | null, packetLossRate: number): PeerNetworkStats['quality'] {
-  if (audioLatency === null) return 'unknown'
-  // 오디오 지연 기준: 합주 가능 수준 판정
-  // 30ms 이하: 거의 실시간, 50ms 이하: 합주 가능, 100ms 이하: 약간 지연 느낌
-  if (audioLatency < 30 && packetLossRate < 1) return 'excellent'
-  if (audioLatency < 50 && packetLossRate < 3) return 'good'
-  if (audioLatency < 100 && packetLossRate < 5) return 'fair'
+// 네트워크 품질 판정 함수
+function getNetworkQuality(latency: number | null, packetLossRate: number): PeerNetworkStats['quality'] {
+  if (latency === null) return 'unknown'
+  if (latency < 30 && packetLossRate < 1) return 'excellent'
+  if (latency < 60 && packetLossRate < 3) return 'good'
+  if (latency < 100 && packetLossRate < 5) return 'fair'
   return 'poor'
 }
 
@@ -148,17 +137,6 @@ type RoomContextType = {
   requestPerform: (instrument: string) => void
   cancelRequest: () => void
 
-  // 악기 변경 요청 (방장용)
-  pendingInstrumentChanges: InstrumentChangeRequest[]
-  approveInstrumentChange: (oderId: string) => void
-  rejectInstrumentChange: (oderId: string, reason?: string) => void
-
-  // 악기 변경 요청 (연주자용)
-  myInstrumentChangeStatus: MyRequestStatus
-  myNewInstrument: string | null
-  requestInstrumentChange: (newInstrument: string) => void
-  cancelInstrumentChangeRequest: () => void
-
   // 녹음
   isRecording: boolean
   recordings: Recording[]
@@ -166,13 +144,6 @@ type RoomContextType = {
   startRecording: () => void
   stopRecording: () => void
   deleteRecording: (id: string) => void
-
-  // 미니 플레이어 모드
-  isMiniPlayerMode: boolean
-  enterMiniPlayerMode: () => void
-  exitMiniPlayerMode: () => void
-  returnToRoom: () => string | null
-  clearMiniPlayerMode: () => void
 }
 
 const RoomContext = createContext<RoomContextType | null>(null)
@@ -210,9 +181,6 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     panner: StereoPannerNode
     analyser: AnalyserNode
   }>>(new Map())
-
-  // 미니 플레이어 모드 ref (unregisterAudioStream에서 사용)
-  const isMiniPlayerModeRef = useRef(false)
 
   // 공유 AudioContext (한 번만 생성)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -289,13 +257,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // 오디오 노드 해제 - useCallback으로 안정적인 참조 유지
-  // 미니 플레이어 모드일 때는 오디오 노드를 유지하여 소리가 계속 들리도록 함
   const unregisterAudioStream = useCallback((peerId: string) => {
-    // 미니 플레이어 모드면 오디오 노드 유지 (ref 사용)
-    if (isMiniPlayerModeRef.current) {
-      console.log('[AUDIO] Mini player mode - keeping audio nodes:', peerId.slice(0, 8))
-      return
-    }
     const nodes = audioNodesRef.current.get(peerId)
     if (nodes) {
       nodes.source.disconnect()
@@ -318,7 +280,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     if (context && context.state === 'suspended') {
       context.resume().then(() => {
         console.log('[AUDIO] AudioContext resumed')
-
+        
         // Resume 후 기존 스트림들 재연결 (suspended 상태에서 연결된 노드들 복구)
         Object.entries(remoteAudioMap).forEach(([peerId, stream]) => {
           // 기존 노드 제거 후 재연결
@@ -402,13 +364,6 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const [myRequestStatus, setMyRequestStatus] = useState<MyRequestStatus>('none')
   const [myRequestInstrument, setMyRequestInstrument] = useState<string | null>(null)
 
-  // 악기 변경 요청 상태 (방장용)
-  const [pendingInstrumentChanges, setPendingInstrumentChanges] = useState<InstrumentChangeRequest[]>([])
-
-  // 악기 변경 요청 상태 (연주자용)
-  const [myInstrumentChangeStatus, setMyInstrumentChangeStatus] = useState<MyRequestStatus>('none')
-  const [myNewInstrument, setMyNewInstrument] = useState<string | null>(null)
-
   // 녹음 상태
   const [isRecording, setIsRecording] = useState(false)
   const [recordings, setRecordings] = useState<Recording[]>([])
@@ -419,11 +374,6 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const recordingStartTimeRef = useRef<number>(0)
   const recordingTimerRef = useRef<number | null>(null)
   const recordingMimeTypeRef = useRef<string>('')
-
-  // 미니 플레이어 모드 상태
-  const [isMiniPlayerMode, setIsMiniPlayerMode] = useState(false)
-  // 미니 플레이어에서 방으로 돌아가는 중인지 (cleanup에서 다시 미니 모드로 전환 방지)
-  const isReturningToRoomRef = useRef(false)
 
   const wsRef = useRef<WebSocket | null>(null)
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map())
@@ -436,10 +386,6 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const localStreamRef = useRef<MediaStream | null>(null)
   const clientIdRef = useRef<string | null>(null)
   const peersRef = useRef<string[]>([])
-
-  // 재연결용 ref (WebSocket 끊어졌을 때 다시 join하기 위한 정보)
-  const currentRoomIdRef = useRef<string | null>(null)
-  const isHostRef = useRef<boolean>(false)
 
   const sendSignalMessage = (payload: Record<string, unknown>) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -689,59 +635,24 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           autoGainControl: audioSettings.autoGainControl,
         },
       }
-      const rawStream = await navigator.mediaDevices.getUserMedia(constraints)
-
-      // 스테레오 입력을 모노로 합치는 처리 (channelCount가 2이고 stereoMode가 'mono'인 경우)
-      let stream = rawStream
-      const audioTrack = rawStream.getAudioTracks()[0]
-      const trackSettings = audioTrack?.getSettings()
-
-      if (trackSettings?.channelCount === 2 && audioSettings.stereoMode === 'mono') {
-        // Web Audio API로 스테레오 → 모노 변환
-        const audioContext = new AudioContext({ sampleRate: audioSettings.sampleRate })
-        const source = audioContext.createMediaStreamSource(rawStream)
-
-        // 스테레오를 모노로 믹싱하는 노드 생성
-        const merger = audioContext.createChannelMerger(1)
-        const splitter = audioContext.createChannelSplitter(2)
-        const gainL = audioContext.createGain()
-        const gainR = audioContext.createGain()
-
-        // L/R 각각 0.5 볼륨으로 믹싱 (클리핑 방지)
-        gainL.gain.value = 0.5
-        gainR.gain.value = 0.5
-
-        source.connect(splitter)
-        splitter.connect(gainL, 0)  // Left channel
-        splitter.connect(gainR, 1)  // Right channel
-        gainL.connect(merger, 0, 0)
-        gainR.connect(merger, 0, 0)
-
-        // 모노 스트림 생성
-        const destination = audioContext.createMediaStreamDestination()
-        merger.connect(destination)
-
-        stream = destination.stream
-        console.log('[RTC] Stereo input converted to mono')
-      }
-
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
       setLocalStream(stream)
       // ref도 즉시 업데이트 (createOfferForPeer에서 사용)
       localStreamRef.current = stream
 
-      // 실제 적용된 설정 가져오기 (원본 스트림 기준)
-      const finalAudioTrack = stream.getAudioTracks()[0]
-      if (finalAudioTrack) {
+      // 실제 적용된 설정 가져오기
+      const audioTrack = stream.getAudioTracks()[0]
+      if (audioTrack) {
         // MediaTrackSettings 타입에 latency가 표준에는 없지만 일부 브라우저에서 지원
-        const finalTrackSettings = finalAudioTrack.getSettings() as MediaTrackSettings & { latency?: number }
+        const trackSettings = audioTrack.getSettings() as MediaTrackSettings & { latency?: number }
         setActualStreamSettings({
-          deviceId: trackSettings?.deviceId ?? null,  // 원본 rawStream의 설정 사용
-          sampleRate: finalTrackSettings.sampleRate ?? null,
-          channelCount: finalTrackSettings.channelCount ?? null,
-          echoCancellation: trackSettings?.echoCancellation ?? null,
-          noiseSuppression: trackSettings?.noiseSuppression ?? null,
-          autoGainControl: trackSettings?.autoGainControl ?? null,
-          latency: (trackSettings as MediaTrackSettings & { latency?: number })?.latency ?? null,
+          deviceId: trackSettings.deviceId ?? null,
+          sampleRate: trackSettings.sampleRate ?? null,
+          channelCount: trackSettings.channelCount ?? null,
+          echoCancellation: trackSettings.echoCancellation ?? null,
+          noiseSuppression: trackSettings.noiseSuppression ?? null,
+          autoGainControl: trackSettings.autoGainControl ?? null,
+          latency: trackSettings.latency ?? null,
         })
       }
 
@@ -851,21 +762,11 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
   const joinRoom = (roomId: string, isHost?: boolean) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      setJoinFeedback('시그널링 서버에 연결 중입니다. 잠시 후 다시 시도해주세요.')
+      setJoinFeedback('시그널링 서버 연결을 확인하세요.')
       return
     }
-    // userId를 포함하여 서버에서 중복 연결 처리 가능하도록
-    wsRef.current.send(JSON.stringify({
-      type: 'join',
-      roomId,
-      nickname,
-      isHost: isHost || false,
-      userId: user?.id || null
-    }))
+    wsRef.current.send(JSON.stringify({ type: 'join', roomId, nickname, isHost: isHost || false }))
     setCurrentRoomId(roomId)
-    // 재연결용 ref 업데이트
-    currentRoomIdRef.current = roomId
-    isHostRef.current = isHost || false
     setJoinFeedback('룸 입장 시도 중...')
   }
 
@@ -876,9 +777,6 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     stopLocalMic(false) // 이미 leave로 알렸으므로 중복 알림 방지
     setPeers([])
     setCurrentRoomId(null)
-    // 재연결용 ref 초기화 (의도적으로 나간 경우 재연결 안 함)
-    currentRoomIdRef.current = null
-    isHostRef.current = false
     setJoinFeedback('')
     setChatMessages([])
     // 오디오 노드 정리
@@ -913,9 +811,6 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     setRecordingDuration(0)
     // 녹음 destination 해제
     recordingDestinationRef.current = null
-    // 미니 플레이어 모드 해제
-    isMiniPlayerModeRef.current = false
-    setIsMiniPlayerMode(false)
   }
 
   // 기본 믹서 설정
@@ -1067,49 +962,6 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     setMyRequestStatus('none')
     setMyRequestInstrument(null)
     console.log('[REQUEST] Cancelled perform request')
-  }
-
-  // 악기 변경 요청 (연주자가 방장에게 요청)
-  const requestInstrumentChange = (newInstrument: string) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-    wsRef.current.send(JSON.stringify({
-      type: 'request-instrument-change',
-      newInstrument
-    }))
-    setMyNewInstrument(newInstrument)
-    console.log('[INSTRUMENT-CHANGE] Sent instrument change request for:', newInstrument)
-  }
-
-  // 악기 변경 요청 취소
-  const cancelInstrumentChangeRequest = () => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-    wsRef.current.send(JSON.stringify({ type: 'cancel-instrument-change-request' }))
-    setMyInstrumentChangeStatus('none')
-    setMyNewInstrument(null)
-    console.log('[INSTRUMENT-CHANGE] Cancelled instrument change request')
-  }
-
-  // 악기 변경 요청 승인 (방장)
-  const approveInstrumentChange = (oderId: string) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-    wsRef.current.send(JSON.stringify({
-      type: 'approve-instrument-change',
-      targetId: oderId
-    }))
-    setPendingInstrumentChanges(prev => prev.filter(r => r.oderId !== oderId))
-    console.log('[INSTRUMENT-CHANGE] Approved instrument change for:', oderId)
-  }
-
-  // 악기 변경 요청 거절 (방장)
-  const rejectInstrumentChange = (oderId: string, reason?: string) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-    wsRef.current.send(JSON.stringify({
-      type: 'reject-instrument-change',
-      targetId: oderId,
-      reason
-    }))
-    setPendingInstrumentChanges(prev => prev.filter(r => r.oderId !== oderId))
-    console.log('[INSTRUMENT-CHANGE] Rejected instrument change for:', oderId)
   }
 
   // === 녹음 기능 ===
@@ -1296,57 +1148,6 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     console.log('[RECORDING] Deleted recording:', id)
   }
 
-  // === 미니 플레이어 모드 함수 ===
-
-  // 미니 플레이어 모드로 전환 (RoomDetail 페이지를 떠날 때 호출)
-  const enterMiniPlayerMode = () => {
-    // 방으로 돌아가는 중이면 미니 플레이어 모드로 전환하지 않음
-    if (isReturningToRoomRef.current) {
-      console.log('[MINI] Skipping enter mini player mode - returning to room')
-      isReturningToRoomRef.current = false
-      return
-    }
-    if (!currentRoomId) {
-      console.log('[MINI] Cannot enter mini player mode - not in a room')
-      return
-    }
-    console.log('[MINI] Entering mini player mode, room:', currentRoomId.slice(0, 8))
-    isMiniPlayerModeRef.current = true
-    setIsMiniPlayerMode(true)
-  }
-
-  // 미니 플레이어 모드 종료 및 방 나가기
-  const exitMiniPlayerMode = () => {
-    console.log('[MINI] Exiting mini player mode and leaving room')
-    isMiniPlayerModeRef.current = false
-    setIsMiniPlayerMode(false)
-    leaveRoom()
-  }
-
-  // 미니 플레이어에서 방으로 돌아가기 (현재 방 ID 반환)
-  const returnToRoom = (): string | null => {
-    if (!currentRoomId) {
-      console.log('[MINI] Cannot return to room - no current room')
-      return null
-    }
-    console.log('[MINI] Returning to room:', currentRoomId.slice(0, 8))
-    // cleanup에서 다시 미니 모드로 전환되지 않도록 플래그 설정
-    isReturningToRoomRef.current = true
-    isMiniPlayerModeRef.current = false
-    setIsMiniPlayerMode(false)
-    return currentRoomId
-  }
-
-  // 미니 플레이어 모드만 해제 (방은 유지)
-  const clearMiniPlayerMode = () => {
-    if (isMiniPlayerMode) {
-      console.log('[MINI] Clearing mini player mode')
-      isReturningToRoomRef.current = true
-      isMiniPlayerModeRef.current = false
-      setIsMiniPlayerMode(false)
-    }
-  }
-
   // 요청 승인 (방장)
   const approveRequest = (targetId: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
@@ -1395,72 +1196,38 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
     // StrictMode double-mount 방지용 플래그
     let isMounted = true
-    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
-    let reconnectAttempts = 0
 
-    const connect = () => {
-      if (import.meta.env.DEV) console.log('[WS] Connecting to', SIGNALING_URL)
-      setSignalStatus('connecting')
-      const ws = new WebSocket(SIGNALING_URL)
-      wsRef.current = ws
+    console.log('[WS] Connecting to', SIGNALING_URL)
+    setSignalStatus('connecting')
+    const ws = new WebSocket(SIGNALING_URL)
+    wsRef.current = ws
 
-      ws.onopen = () => {
-        console.log('[WS] Connected!')
-        if (isMounted) setSignalStatus('connected')
-        reconnectAttempts = 0 // 연결 성공 시 재연결 시도 횟수 리셋
-      }
-      ws.onerror = () => {
-        // 서버 미실행 시 에러 로그 최소화
-        if (!isMounted) return
-        setSignalStatus('error')
-      }
-      ws.onclose = (event) => {
-        if (import.meta.env.DEV && event.code !== 1006) console.log('[WS] Closed:', event.code, event.reason)
-        if (!isMounted) return
-        setSignalStatus('idle')
-        setClientId(null)
-        setPeers([])
-        teardownPeerConnections()
-
-        // 방에 입장 중이었고, 정상적인 종료가 아닌 경우에만 재연결 시도
-        // code 1000 = 정상 종료, 1005 = 정상 종료 (no status), 그 외 = 비정상
-        const shouldReconnect = currentRoomIdRef.current && event.code !== 1000 && event.code !== 1005
-        if (shouldReconnect && reconnectAttempts < 3) {
-          reconnectAttempts++
-          console.log(`[WS] Was in room, attempting reconnect ${reconnectAttempts}/3 in 2s...`)
-          reconnectTimeout = setTimeout(() => {
-            if (isMounted && currentRoomIdRef.current) {
-              connect()
-            }
-          }, 2000)
-        } else if (reconnectAttempts >= 3) {
-          console.log('[WS] Max reconnect attempts reached, giving up')
-          currentRoomIdRef.current = null
-          isHostRef.current = false
+    ws.onopen = () => {
+      console.log('[WS] Connected!')
+      if (isMounted) setSignalStatus('connected')
+    }
+    ws.onerror = (event) => {
+      console.error('[WS] Error:', event)
+      if (!isMounted) return
+      setSignalStatus('error')
+    }
+    ws.onclose = (event) => {
+      console.log('[WS] Closed:', event.code, event.reason)
+      if (!isMounted) return
+      setSignalStatus('idle')
+      setClientId(null)
+      setPeers([])
+      teardownPeerConnections()
+    }
+    ws.onmessage = (event) => {
+      if (!isMounted) return
+      try {
+        const payload = JSON.parse(event.data)
+        if (payload.type === 'welcome') {
+          setClientId(payload.clientId)
+          clientIdRef.current = payload.clientId
+          return
         }
-      }
-      ws.onmessage = (event) => {
-        if (!isMounted) return
-        try {
-          const payload = JSON.parse(event.data)
-          if (payload.type === 'welcome') {
-            setClientId(payload.clientId)
-            clientIdRef.current = payload.clientId
-
-            // 재연결 후 이전 방에 자동으로 다시 join
-            if (currentRoomIdRef.current) {
-              console.log('[WS] Reconnected, rejoining room:', currentRoomIdRef.current.slice(0, 8))
-              ws.send(JSON.stringify({
-                type: 'join',
-                roomId: currentRoomIdRef.current,
-                nickname: nicknameRef.current,
-                isHost: isHostRef.current,
-                userId: user?.id || null,
-                isRejoin: true
-              }))
-            }
-            return
-          }
         // 새로운 서버 메시지: 방 상태 (입장 시 수신)
         if (payload.type === 'room-state') {
           const peerList: string[] = Array.isArray(payload.peerIds) ? payload.peerIds : []
@@ -1697,115 +1464,21 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           setMyRequestStatus('rejected')
           return
         }
-
-        // === 악기 변경 요청 관련 메시지 ===
-
-        // 악기 변경 요청 전송 확인 (연주자)
-        if (payload.type === 'instrument-change-request-sent') {
-          setMyInstrumentChangeStatus('pending')
-          console.log('[INSTRUMENT-CHANGE] Request sent, waiting for approval')
-          return
-        }
-
-        // 악기 변경 요청 수신 (방장)
-        if (payload.type === 'instrument-change-request-received' && payload.request) {
-          console.log('[INSTRUMENT-CHANGE] Received instrument change request:', payload.request)
-          setPendingInstrumentChanges(prev => {
-            // 중복 방지
-            if (prev.some(r => r.oderId === payload.request.oderId)) return prev
-            return [...prev, payload.request]
-          })
-          return
-        }
-
-        // 악기 변경 요청 취소됨 (방장)
-        if (payload.type === 'instrument-change-request-cancelled' && payload.oderId) {
-          console.log('[INSTRUMENT-CHANGE] Request cancelled by:', payload.oderId.slice(0, 8))
-          setPendingInstrumentChanges(prev => prev.filter(r => r.oderId !== payload.oderId))
-          return
-        }
-
-        // 악기 변경 승인됨 (연주자)
-        if (payload.type === 'instrument-change-approved') {
-          console.log('[INSTRUMENT-CHANGE] Approved! New instrument:', payload.newInstrument)
-          setMyInstrumentChangeStatus('approved')
-          // 악기만 업데이트 (start-performing을 다시 보내지 않음)
-          setMyInstrumentState(payload.newInstrument)
-          myInstrumentRef.current = payload.newInstrument
-          // 내 peerInstruments도 업데이트 (닉네임과 isHost 유지)
-          const myId = clientIdRef.current
-          if (myId) {
-            setPeerInstruments(prev => {
-              if (!prev[myId]) return prev
-              return {
-                ...prev,
-                [myId]: {
-                  ...prev[myId],
-                  instrument: payload.newInstrument
-                }
-              }
-            })
-          }
-          // 상태 초기화
-          setTimeout(() => {
-            setMyInstrumentChangeStatus('none')
-            setMyNewInstrument(null)
-          }, 2000)
-          return
-        }
-
-        // 악기 변경 거절됨 (연주자)
-        if (payload.type === 'instrument-change-rejected') {
-          console.log('[INSTRUMENT-CHANGE] Rejected:', payload.reason)
-          setMyInstrumentChangeStatus('rejected')
-          setTimeout(() => {
-            setMyInstrumentChangeStatus('none')
-            setMyNewInstrument(null)
-          }, 3000)
-          return
-        }
-
-        // 다른 참여자의 악기 변경됨
-        if (payload.type === 'participant-instrument-changed' && payload.oderId && payload.instrument) {
-          console.log('[INSTRUMENT-CHANGE] Participant changed instrument:', payload.oderId.slice(0, 8), '->', payload.instrument)
-          setPeerInstruments(prev => {
-            if (!prev[payload.oderId]) return prev
-            return {
-              ...prev,
-              [payload.oderId]: {
-                ...prev[payload.oderId],
-                instrument: payload.instrument
-              }
-            }
-          })
-          return
-        }
-        } catch {
-          // ignore malformed payloads
-        }
+      } catch {
+        // ignore malformed payloads
       }
     }
-
-    // 초기 연결
-    connect()
 
     return () => {
       isMounted = false
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout)
-      }
       // 연결이 완전히 열린 경우에만 close
-      const ws = wsRef.current
-      if (ws) {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close()
-        } else if (ws.readyState === WebSocket.CONNECTING) {
-          // 연결 중이면 열리자마자 닫기
-          ws.onopen = () => ws.close()
-        }
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close()
+      } else if (ws.readyState === WebSocket.CONNECTING) {
+        // 연결 중이면 열리자마자 닫기
+        ws.onopen = () => ws.close()
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Update peer connections when local stream changes
@@ -1839,7 +1512,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         if (!isConnected) {
           // 연결 대기 중인 피어도 표시
           statsUpdate[peerId] = {
-            audioLatency: null,
+            latency: null,
             jitter: null,
             packetsLost: 0,
             packetLossRate: 0,
@@ -1850,10 +1523,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
         try {
           const stats = await pc.getStats()
-          let rtt: number | null = null
+          let latency: number | null = null
           let jitter: number | null = null
-          let jitterBufferDelay: number | null = null
-          let playoutDelay: number | null = null
           let packetsLost = 0
           let packetsReceived = 0
 
@@ -1862,18 +1533,18 @@ export function RoomProvider({ children }: { children: ReactNode }) {
             if (report.type === 'candidate-pair' &&
                 (report.state === 'succeeded' || report.nominated === true)) {
               if (typeof report.currentRoundTripTime === 'number') {
-                rtt = report.currentRoundTripTime * 1000 // ms로 변환
+                latency = Math.round(report.currentRoundTripTime * 1000) // ms로 변환
               }
             }
 
             // remote-inbound-rtp에서도 RTT 가져오기 시도 (fallback)
-            if (report.type === 'remote-inbound-rtp' && rtt === null) {
+            if (report.type === 'remote-inbound-rtp' && latency === null) {
               if (typeof report.roundTripTime === 'number') {
-                rtt = report.roundTripTime * 1000
+                latency = Math.round(report.roundTripTime * 1000)
               }
             }
 
-            // inbound-rtp에서 jitter, 패킷 손실, playout delay 가져오기
+            // inbound-rtp에서 jitter와 패킷 손실 가져오기
             if (report.type === 'inbound-rtp' && report.kind === 'audio') {
               if (typeof report.jitter === 'number') {
                 jitter = Math.round(report.jitter * 1000) // ms로 변환
@@ -1884,50 +1555,23 @@ export function RoomProvider({ children }: { children: ReactNode }) {
               if (typeof report.packetsReceived === 'number') {
                 packetsReceived = report.packetsReceived
               }
-              // jitterBufferDelay: 지터 버퍼에서 대기한 총 시간
-              if (typeof report.jitterBufferDelay === 'number' &&
-                  typeof report.jitterBufferEmittedCount === 'number' &&
-                  report.jitterBufferEmittedCount > 0) {
-                jitterBufferDelay = (report.jitterBufferDelay / report.jitterBufferEmittedCount) * 1000 // ms
-              }
-              // totalPlayoutDelay: 수신부터 스피커 출력까지의 총 지연 (디코딩+버퍼+재생)
-              if (typeof report.totalPlayoutDelay === 'number' &&
-                  typeof report.totalSamplesReceived === 'number' &&
-                  report.totalSamplesReceived > 0) {
-                // 샘플당 평균 playout 지연 (초) → ms로 변환
-                // totalPlayoutDelay는 초 단위, totalSamplesReceived는 샘플 수
-                // 48000 샘플 = 1초이므로, (totalPlayoutDelay / totalSamplesReceived) * sampleRate = 실제 지연(초)
-                const sampleRate = 48000 // 기본 샘플레이트
-                playoutDelay = (report.totalPlayoutDelay / report.totalSamplesReceived) * sampleRate * 1000
-              }
             }
           })
 
           const totalPackets = packetsReceived + packetsLost
           const packetLossRate = totalPackets > 0 ? (packetsLost / totalPackets) * 100 : 0
 
-          // 실제 오디오 지연 계산
-          // playoutDelay가 있으면 사용 (수신→재생 지연)
-          // 여기에 네트워크 단방향 지연(RTT/2)을 더하면 송신→재생 전체 지연
-          let audioLatency: number | null = null
-          if (rtt !== null) {
-            const networkDelay = rtt / 2 // 네트워크 단방향 지연
-            // playoutDelay가 있으면 실제 수신→재생 지연 사용, 없으면 jitterBuffer + 5ms 추정
-            const localDelay = playoutDelay ?? (jitterBufferDelay ?? 0) + 5
-            audioLatency = Math.round(networkDelay + localDelay)
-          }
-
           statsUpdate[peerId] = {
-            audioLatency,
+            latency,
             jitter,
             packetsLost,
             packetLossRate: Math.round(packetLossRate * 10) / 10,
-            quality: getNetworkQuality(audioLatency, packetLossRate)
+            quality: getNetworkQuality(latency, packetLossRate)
           }
         } catch (err) {
           console.error(`Failed to get stats for peer ${peerId}:`, err)
           statsUpdate[peerId] = {
-            audioLatency: null,
+            latency: null,
             jitter: null,
             packetsLost: 0,
             packetLossRate: 0,
@@ -2006,15 +1650,6 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         myRequestInstrument,
         requestPerform,
         cancelRequest,
-        // 악기 변경 요청 (방장용)
-        pendingInstrumentChanges,
-        approveInstrumentChange,
-        rejectInstrumentChange,
-        // 악기 변경 요청 (연주자용)
-        myInstrumentChangeStatus,
-        myNewInstrument,
-        requestInstrumentChange,
-        cancelInstrumentChangeRequest,
         // 녹음
         isRecording,
         recordings,
@@ -2022,12 +1657,6 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         startRecording,
         stopRecording,
         deleteRecording,
-        // 미니 플레이어 모드
-        isMiniPlayerMode,
-        enterMiniPlayerMode,
-        exitMiniPlayerMode,
-        returnToRoom,
-        clearMiniPlayerMode,
       }}
     >
       {children}

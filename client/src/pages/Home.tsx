@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
-import './Home.css'
+import { PlanStatus } from '../components/PlanStatus'
+import { AdBanner } from '../components/AdBanner'
+import { useAuth } from '../contexts/AuthContext'
 
 type FeaturePillar = {
   title: string
@@ -36,6 +38,8 @@ const FEATURE_PILLARS: FeaturePillar[] = [
 ]
 
 export function Home() {
+  const { user } = useAuth()
+
   return (
     <div className="home-page">
       <header className="hero">
@@ -74,6 +78,8 @@ export function Home() {
       </header>
 
       <main>
+        <AdBanner position="top" />
+        
         <section className="panel feature-grid" aria-label="핵심 기능">
           {FEATURE_PILLARS.map((feature) => (
             <article key={feature.title} className="feature-card">
@@ -122,6 +128,18 @@ export function Home() {
             </article>
           </div>
         </section>
+
+        {/* 사용자 플랜 상태 */}
+        {user && (
+          <section className="panel user-plan-section">
+            <div className="section-head">
+              <h2>내 플랜 상태</h2>
+            </div>
+            <PlanStatus />
+          </section>
+        )}
+
+        <AdBanner position="bottom" />
       </main>
     </div>
   )

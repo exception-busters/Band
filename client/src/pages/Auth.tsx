@@ -1,7 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import './Auth.css'
 
 interface SignUpData {
   email: string

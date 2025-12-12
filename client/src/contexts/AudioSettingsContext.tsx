@@ -1,8 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 
-// 스테레오 출력 모드
-export type StereoMode = 'stereo' | 'mono'  // stereo: L/R 분리 유지, mono: L+R 합쳐서 센터로
-
 // 오디오 설정 타입
 export interface AudioSettings {
   inputDeviceId: string | null
@@ -12,7 +9,6 @@ export interface AudioSettings {
   echoCancellation: boolean
   noiseSuppression: boolean
   autoGainControl: boolean
-  stereoMode: StereoMode  // 스테레오 입력 시 출력 모드
 }
 
 // 실제 적용된 오디오 설정 (브라우저가 실제로 적용한 값)
@@ -55,7 +51,6 @@ interface AudioSettingsContextType {
   setEchoCancellation: (enabled: boolean) => void
   setNoiseSuppression: (enabled: boolean) => void
   setAutoGainControl: (enabled: boolean) => void
-  setStereoMode: (mode: StereoMode) => void
 
   // 프리셋
   applyPreset: (preset: AudioPreset) => void
@@ -83,7 +78,6 @@ const defaultSettings: AudioSettings = {
   echoCancellation: false,  // 악기용이므로 기본 OFF
   noiseSuppression: false,
   autoGainControl: false,
-  stereoMode: 'mono',  // 기본값: 스테레오 입력을 모노로 합침
 }
 
 // 프리셋 설정
@@ -288,10 +282,6 @@ export function AudioSettingsProvider({ children }: { children: ReactNode }) {
     setSettings(prev => ({ ...prev, autoGainControl: enabled }))
   }, [])
 
-  const setStereoMode = useCallback((mode: StereoMode) => {
-    setSettings(prev => ({ ...prev, stereoMode: mode }))
-  }, [])
-
   // 프리셋 적용
   const applyPreset = useCallback((preset: AudioPreset) => {
     const presetSettings = presets[preset]
@@ -491,7 +481,6 @@ export function AudioSettingsProvider({ children }: { children: ReactNode }) {
         setEchoCancellation,
         setNoiseSuppression,
         setAutoGainControl,
-        setStereoMode,
         applyPreset,
         refreshDevices,
         testInput,

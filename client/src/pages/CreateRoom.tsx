@@ -2,7 +2,6 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabaseClient'
-import './CreateRoom.css'
 
 const GENRES = [
   '록', '재즈', '블루스', '클래식', '팝', '힙합',
@@ -202,7 +201,9 @@ export function CreateRoom() {
                 onChange={(e) => setMaxParticipants(Number(e.target.value))}
               >
                 {[2, 4, 6, 8, 10, 12, 16, 20].map(n => (
-                  <option key={n} value={n}>{n}명</option>
+                  <option key={n} value={n}>
+                    {n}명
+                  </option>
                 ))}
               </select>
             </div>
