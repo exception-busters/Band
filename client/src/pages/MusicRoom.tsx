@@ -199,6 +199,47 @@ export function MusicRoom() {
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
+  // 스템 다운로드
+  const handleDownloadStem = (stemName: string, e: React.MouseEvent) => {
+    e.stopPropagation() // 버튼 클릭 시 토글 방지
+
+    const stemPath = separatedStems[stemName as keyof SeparatedStems]
+    if (!stemPath) return
+
+    // 파일 URL 생성
+    const fileName = stemPath.split(/[/\\]/).pop() || `${stemName}.wav`
+    const fileUrl = getMusicFileUrl(fileName)
+
+    // 다운로드 링크 생성 및 클릭
+    const a = document.createElement('a')
+    a.href = fileUrl
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }
+
+  // 모든 스템 다운로드
+  const handleDownloadAllStems = () => {
+    availableStems.forEach((stemName) => {
+      const stemPath = separatedStems[stemName as keyof SeparatedStems]
+      if (!stemPath) return
+
+      const fileName = stemPath.split(/[/\\]/).pop() || `${stemName}.wav`
+      const fileUrl = getMusicFileUrl(fileName)
+
+      // 각 파일 다운로드 (약간의 딜레이 추가)
+      setTimeout(() => {
+        const a = document.createElement('a')
+        a.href = fileUrl
+        a.download = fileName
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+      }, availableStems.indexOf(stemName) * 300)
+    })
+  }
+
   return (
     <div className="music-room-container">
       {/* 파일 업로드 섹션 */}
@@ -238,7 +279,12 @@ export function MusicRoom() {
       {/* 세션 토글 버튼 */}
       {availableStems.length > 0 && (
         <div className="stems-section">
-          <h2>세션 선택</h2>
+          <div className="stems-header">
+            <h2>세션 선택</h2>
+            <button className="download-all-btn" onClick={handleDownloadAllStems}>
+              📥 모든 트랙 다운로드
+            </button>
+          </div>
           <p className="stems-hint">클릭하여 연습하고 싶은 세션을 제외하세요 (제외된 세션은 음소거됩니다)</p>
 
           <div className="stems-buttons">
@@ -247,15 +293,23 @@ export function MusicRoom() {
               const isEnabled = stemStates[stemName] !== false
 
               return (
-                <button
-                  key={stemName}
-                  className={`stem-button ${isEnabled ? 'active' : 'muted'}`}
-                  onClick={() => handleStemToggle(stemName)}
-                >
-                  <span className="stem-icon">{info.icon}</span>
-                  <span className="stem-label">{info.label}</span>
-                  <span className="stem-status">{isEnabled ? 'ON' : 'OFF'}</span>
-                </button>
+                <div key={stemName} className="stem-item">
+                  <button
+                    className={`stem-button ${isEnabled ? 'active' : 'muted'}`}
+                    onClick={() => handleStemToggle(stemName)}
+                  >
+                    <span className="stem-icon">{info.icon}</span>
+                    <span className="stem-label">{info.label}</span>
+                    <span className="stem-status">{isEnabled ? 'ON' : 'OFF'}</span>
+                  </button>
+                  <button
+                    className="download-stem-btn"
+                    onClick={(e) => handleDownloadStem(stemName, e)}
+                    title={`${info.label} 다운로드`}
+                  >
+                    ⬇️
+                  </button>
+                </div>
               )
             })}
           </div>

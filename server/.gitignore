@@ -13,3 +13,19 @@ dist
 
 # Uploaded files
 uploads
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Demucs model cache
+.cache
+models
+*.pt
+*.pth
+
+# Separated audio files
+separated
