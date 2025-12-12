@@ -13,7 +13,12 @@
       "Bash(netstat:*)",
       "Bash(findstr:*)",
       "Bash(npm run dev:*)",
-      "Bash(timeout /t 3 /nobreak)"
+      "Bash(timeout /t 3 /nobreak)",
+      "Bash(npm install:*)",
+      "Bash(pip install:*)",
+      "Bash(taskkill:*)",
+      "Bash(choco --version:*)",
+      "Bash(choco install:*)"
     ],
     "deny": [],
     "ask": []

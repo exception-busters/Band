@@ -11,10 +11,13 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.81.1",
+    "@tonejs/midi": "^2.0.28",
     "@tosspayments/payment-sdk": "^1.9.0",
+    "opensheetmusicdisplay": "^1.9.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^7.9.6"
+    "react-router-dom": "^7.9.6",
+    "tone": "^15.1.22"
   },
   "devDependencies": {
     "@types/react": "^18.2.55",

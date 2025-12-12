@@ -6,6 +6,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import paymentRoutes from './routes/payment';
+import musicRoutes from './routes/music';
 
 // 환경변수 로드
 dotenv.config();
@@ -18,8 +19,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 결제 API 라우트
+// 정적 파일 제공 (업로드된 파일)
+app.use('/uploads', express.static('uploads'));
+
+// API 라우트
 app.use('/api/payment', paymentRoutes);
+app.use('/api/music', musicRoutes);
 
 // 기본 라우트
 app.get('/', (req, res) => {

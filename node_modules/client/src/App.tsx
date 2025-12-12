@@ -21,6 +21,7 @@ import { Payment } from './pages/Payment'
 import { PaymentSuccess } from './pages/PaymentSuccess'
 import { PaymentFail } from './pages/PaymentFail'
 import { Profile } from './pages/Profile'
+import { Karaoke } from './pages/Karaoke'
 import { usePremium } from './contexts/PremiumContext'
 import './App.css'
 import './styles/pricing.css'
@@ -45,6 +46,7 @@ function AppContent() {
           <Route path="/community" element={<Community />} />
           <Route path="/community/create" element={<CreatePost />} />
           <Route path="/community/:postId" element={<PostDetail />} />
+          <Route path="/karaoke" element={<Karaoke />} />
           <Route path="/settings/audio" element={<AudioSettingsPage />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/payment" element={<Payment />} />
