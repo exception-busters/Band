@@ -37,8 +37,8 @@ async def health():
 async def separate_audio(
     audio: UploadFile = File(...),
     model: str = Form("htdemucs_ft"),
-    shifts: int = Form(2),
-    overlap: float = Form(0.25),
+    shifts: int = Form(1),
+    overlap: float = Form(0.1),
     split: bool = Form(True)
 ):
     """
@@ -47,8 +47,8 @@ async def separate_audio(
     Parameters:
     - audio: 업로드할 오디오 파일
     - model: 사용할 모델 (htdemucs_ft 권장, 고품질 4-stem 분리)
-    - shifts: Random shifts (기본값: 2, 높을수록 정확도↑ 처리시간↑)
-    - overlap: 세그먼트 겹침 비율 (기본값: 0.25, 높을수록 부드러운 결과)
+    - shifts: Random shifts (기본값: 1, CPU에서는 1 권장)
+    - overlap: 세그먼트 겹침 비율 (기본값: 0.1, CPU에서는 낮게)
     - split: Split audio (기본값: True)
     """
 

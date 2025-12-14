@@ -14,8 +14,8 @@ def main():
     parser = argparse.ArgumentParser(description='Demucs 음원 분리')
     parser.add_argument('input_file', help='입력 오디오 파일 경로')
     parser.add_argument('output_dir', help='출력 디렉토리 경로')
-    parser.add_argument('--shifts', type=int, default=2, help='랜덤 시프트 횟수 (기본값: 2)')
-    parser.add_argument('--overlap', type=float, default=0.25, help='세그먼트 겹침 비율 (기본값: 0.25)')
+    parser.add_argument('--shifts', type=int, default=1, help='랜덤 시프트 횟수 (기본값: 1, CPU에서는 1 권장)')
+    parser.add_argument('--overlap', type=float, default=0.1, help='세그먼트 겹침 비율 (기본값: 0.1, CPU에서는 낮게)')
     parser.add_argument('--segment', type=float, default=None, help='세그먼트 길이(초), None이면 모델 기본값')
 
     args = parser.parse_args()
