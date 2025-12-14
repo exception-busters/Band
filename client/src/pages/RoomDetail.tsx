@@ -6,16 +6,17 @@ import { supabase } from '../lib/supabaseClient'
 import './RoomDetail.css'
 
 // 안정적인 RemoteAudio 컴포넌트 (re-render 방지)
+// 주의: 이 컴포넌트는 unregisterAudioStream을 cleanup에서 호출하지 않음
+// 오디오 노드 정리는 RoomContext의 remoteAudioMap 기반 useEffect에서 처리
+// (미니 플레이어 모드 진입 시 타이밍 문제 방지)
 const RemoteAudio = memo(function RemoteAudio({
   oderId,
   stream,
-  registerAudioStream,
-  unregisterAudioStream
+  registerAudioStream
 }: {
   oderId: string
   stream: MediaStream
   registerAudioStream: (peerId: string, stream: MediaStream) => void
-  unregisterAudioStream: (peerId: string) => void
 }) {
   const audioRef = useRef<HTMLAudioElement>(null)
 
@@ -37,12 +38,12 @@ const RemoteAudio = memo(function RemoteAudio({
       console.log('[RemoteAudio] Play failed:', err.message)
     })
 
-    // Cleanup: 컴포넌트 unmount 또는 stream 변경 시 노드 해제
+    // Cleanup: unregisterAudioStream은 호출하지 않음
+    // RoomContext의 useEffect에서 remoteAudioMap 기반으로 정리함
     return () => {
-      console.log('[RemoteAudio] Cleanup - unregistering:', oderId.slice(0, 8))
-      unregisterAudioStream(oderId)
+      console.log('[RemoteAudio] Cleanup (audio nodes managed by RoomContext):', oderId.slice(0, 8))
     }
-  }, [oderId, stream, registerAudioStream, unregisterAudioStream])
+  }, [oderId, stream, registerAudioStream])
 
   return <audio ref={audioRef} playsInline style={{ display: 'none' }} />
 })
@@ -139,7 +140,6 @@ export function RoomDetail() {
     masterLevel,
     resumeAllAudioContexts,
     registerAudioStream,
-    unregisterAudioStream,
     // 채팅
     chatMessages,
     sendChatMessage,
@@ -1315,7 +1315,6 @@ export function RoomDetail() {
                         oderId={oderId}
                         stream={remoteAudioMap[oderId]}
                         registerAudioStream={registerAudioStream}
-                        unregisterAudioStream={unregisterAudioStream}
                       />
                     )}
                   </div>

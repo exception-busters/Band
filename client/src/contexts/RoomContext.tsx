@@ -211,6 +211,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     analyser: AnalyserNode
   }>>(new Map())
 
+  // 숨겨진 audio 요소 저장 (MediaStream 소비용)
+  const hiddenAudioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map())
+
   // 미니 플레이어 모드 ref (unregisterAudioStream에서 사용)
   const isMiniPlayerModeRef = useRef(false)
 
@@ -246,6 +249,15 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     try {
       const context = getAudioContext()
       console.log('[AUDIO] Creating Web Audio nodes for:', peerId.slice(0, 8), 'context state:', context.state)
+
+      // AudioContext가 suspended 상태면 resume 시도
+      if (context.state === 'suspended') {
+        context.resume().then(() => {
+          console.log('[AUDIO] AudioContext resumed in connectToWebAudio')
+        }).catch(err => {
+          console.log('[AUDIO] Could not resume context:', err.message)
+        })
+      }
 
       // MediaStreamAudioSourceNode 사용 (재연결 가능)
       const source = context.createMediaStreamSource(stream)
@@ -289,13 +301,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // 오디오 노드 해제 - useCallback으로 안정적인 참조 유지
-  // 미니 플레이어 모드일 때는 오디오 노드를 유지하여 소리가 계속 들리도록 함
+  // 주의: RemoteAudio cleanup에서는 호출하지 않음 (미니플레이어 모드 대응)
+  // remoteAudioMap에서 스트림이 제거될 때만 호출됨
   const unregisterAudioStream = useCallback((peerId: string) => {
-    // 미니 플레이어 모드면 오디오 노드 유지 (ref 사용)
-    if (isMiniPlayerModeRef.current) {
-      console.log('[AUDIO] Mini player mode - keeping audio nodes:', peerId.slice(0, 8))
-      return
-    }
     const nodes = audioNodesRef.current.get(peerId)
     if (nodes) {
       nodes.source.disconnect()
@@ -343,7 +351,55 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // 스트림 자동 연결 (미니 플레이어 모드 포함)
+  // RemoteAudio 컴포넌트가 없어도 Web Audio에 연결하여 소리가 들리도록 함
+  // 중요: 이 useEffect는 레벨 측정 useEffect보다 먼저 실행되어야 함 (노드 생성 후 레벨 측정)
+  useEffect(() => {
+    const currentPeerIds = Object.keys(remoteAudioMap)
+
+    currentPeerIds.forEach(peerId => {
+      const stream = remoteAudioMap[peerId]
+      if (!stream) return
+
+      // Web Audio에 연결되어 있지 않으면 연결
+      if (!audioNodesRef.current.has(peerId)) {
+        console.log('[AUDIO] Auto-connecting stream for:', peerId.slice(0, 8), 'miniPlayerMode:', isMiniPlayerModeRef.current)
+        connectToWebAudio(peerId, stream)
+      }
+
+      // 미니 플레이어 모드에서 숨겨진 audio 요소로 스트림 소비 (브라우저가 스트림을 활성 상태로 유지)
+      if (isMiniPlayerModeRef.current && !hiddenAudioElementsRef.current.has(peerId)) {
+        const audio = document.createElement('audio')
+        audio.srcObject = stream
+        audio.muted = true // Web Audio가 실제 출력 담당
+        audio.setAttribute('playsinline', 'true')
+        audio.play().catch(err => {
+          console.log('[AUDIO] Hidden audio play failed:', err.message)
+        })
+        hiddenAudioElementsRef.current.set(peerId, audio)
+        console.log('[AUDIO] Created hidden audio element for mini player:', peerId.slice(0, 8))
+      }
+    })
+
+    // 제거된 스트림의 오디오 노드 및 숨겨진 요소 정리
+    audioNodesRef.current.forEach((_, peerId) => {
+      if (!remoteAudioMap[peerId]) {
+        unregisterAudioStream(peerId)
+      }
+    })
+
+    hiddenAudioElementsRef.current.forEach((audio, peerId) => {
+      if (!remoteAudioMap[peerId]) {
+        audio.srcObject = null
+        audio.remove()
+        hiddenAudioElementsRef.current.delete(peerId)
+        console.log('[AUDIO] Removed hidden audio element:', peerId.slice(0, 8))
+      }
+    })
+  }, [remoteAudioMap])
+
   // 오디오 레벨 측정 (AnalyserNode 사용)
+  // 중요: 이 useEffect는 자동 연결 useEffect 이후에 실행되어야 함 (노드 생성 후 레벨 측정)
   useEffect(() => {
     const measureLevels = () => {
       const newLevels: Record<string, number> = {}
@@ -534,6 +590,15 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const teardownPeerConnections = () => {
     peerConnections.current.forEach((_, peerId) => closePeerConnection(peerId))
     setRemoteAudioMap({})
+
+    // 숨겨진 audio 요소들 정리
+    hiddenAudioElementsRef.current.forEach((audio, peerId) => {
+      audio.srcObject = null
+      audio.remove()
+      console.log('[AUDIO] Teardown - removed hidden audio for:', peerId.slice(0, 8))
+    })
+    hiddenAudioElementsRef.current.clear()
+
     // rtcStatus는 피어 연결이 모두 닫힌 후 자연스럽게 idle이 됨
     // StrictMode cleanup 시 불필요한 상태 변경 방지
   }
@@ -1000,6 +1065,64 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       }
     })
   }, [remoteAudioMap, unregisterAudioStream])
+
+  // 미니플레이어 모드일 때만 자동으로 Web Audio 연결 및 숨겨진 audio 요소 생성
+  // (일반 모드에서는 RemoteAudio 컴포넌트가 처리)
+  useEffect(() => {
+    // ref를 사용 (상태는 비동기 업데이트라 타이밍 이슈 발생 가능)
+    const isInMiniMode = isMiniPlayerModeRef.current
+
+    // 미니플레이어 모드가 아니면 숨겨진 audio 요소만 정리하고 리턴
+    if (!isInMiniMode) {
+      // 미니플레이어 모드에서 일반 모드로 전환 시 숨겨진 audio 요소 정리
+      if (hiddenAudioElementsRef.current.size > 0) {
+        console.log('[AUDIO] Cleaning up hidden audio elements (not in mini mode)')
+        hiddenAudioElementsRef.current.forEach((audio, peerId) => {
+          audio.srcObject = null
+          audio.remove()
+          console.log('[AUDIO] Cleaned up hidden audio:', peerId.slice(0, 8))
+        })
+        hiddenAudioElementsRef.current.clear()
+      }
+      return
+    }
+
+    // 미니플레이어 모드: 새 스트림에 대해 Web Audio 연결 + 숨겨진 audio 요소 생성
+    console.log('[AUDIO] Mini player mode - processing', Object.keys(remoteAudioMap).length, 'streams')
+    Object.entries(remoteAudioMap).forEach(([peerId, stream]) => {
+      // Web Audio 연결 (아직 없는 경우에만)
+      if (!audioNodesRef.current.has(peerId)) {
+        console.log('[AUDIO] Mini player - auto-connecting stream:', peerId.slice(0, 8))
+        connectToWebAudio(peerId, stream)
+      }
+
+      // 숨겨진 audio 요소 생성
+      if (!hiddenAudioElementsRef.current.has(peerId)) {
+        const audio = document.createElement('audio')
+        audio.srcObject = stream
+        audio.muted = true // Web Audio가 실제 출력 담당
+        audio.autoplay = true
+        audio.setAttribute('playsinline', 'true')
+
+        audio.play().catch(err => {
+          console.log('[AUDIO] Hidden audio play failed:', err.message)
+        })
+
+        hiddenAudioElementsRef.current.set(peerId, audio)
+        console.log('[AUDIO] Created hidden audio element for:', peerId.slice(0, 8))
+      }
+    })
+
+    // 제거된 스트림의 숨겨진 audio 요소 정리
+    hiddenAudioElementsRef.current.forEach((audio, peerId) => {
+      if (!remoteAudioMap[peerId]) {
+        audio.srcObject = null
+        audio.remove()
+        hiddenAudioElementsRef.current.delete(peerId)
+        console.log('[AUDIO] Removed hidden audio element for:', peerId.slice(0, 8))
+      }
+    })
+  }, [remoteAudioMap, isMiniPlayerMode])
 
 
   // 채팅 메시지 전송

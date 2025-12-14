@@ -24,7 +24,8 @@ export function Profile() {
   const [isHoveringPhoto, setIsHoveringPhoto] = useState(false)
 
   // 프로필 정보 상태
-  const [nickname, setNickname] = useState(user?.user_metadata?.nickname || '')
+  const [nickname, setNickname] = useState('')
+  const [originalNickname, setOriginalNickname] = useState('')
   const [bio, setBio] = useState(user?.user_metadata?.bio || '')
   const [snsLinks, setSnsLinks] = useState({
     instagram: user?.user_metadata?.instagram || '',
@@ -32,6 +33,38 @@ export function Profile() {
     twitter: user?.user_metadata?.twitter || '',
   })
   const [profilePhoto, setProfilePhoto] = useState(user?.user_metadata?.profile_photo || '')
+
+  // 프로필 테이블에서 닉네임 가져오기 (user_metadata보다 우선)
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user?.id || !supabase) return
+
+      // 먼저 user_metadata에서 시도
+      if (user.user_metadata?.nickname) {
+        setNickname(user.user_metadata.nickname)
+        setOriginalNickname(user.user_metadata.nickname)
+        return
+      }
+
+      // user_metadata에 없으면 profiles 테이블에서 가져오기
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('nickname')
+        .eq('id', user.id)
+        .single()
+
+      if (!error && data?.nickname) {
+        setNickname(data.nickname)
+        setOriginalNickname(data.nickname)
+        // user_metadata도 업데이트
+        await supabase.auth.updateUser({
+          data: { nickname: data.nickname }
+        })
+      }
+    }
+
+    fetchProfile()
+  }, [user?.id, user?.user_metadata?.nickname])
 
   if (!user) {
     navigate('/auth')
@@ -69,13 +102,14 @@ export function Profile() {
   }
 
   const handleSave = async () => {
-    if (!supabase) {
+    if (!supabase || !user?.id) {
       alert('데이터베이스에 연결할 수 없습니다.')
       return
     }
 
     setIsSaving(true)
     try {
+      // auth user_metadata 업데이트
       const { error } = await supabase.auth.updateUser({
         data: {
           nickname,
@@ -88,6 +122,17 @@ export function Profile() {
 
       if (error) throw error
 
+      // profiles 테이블도 업데이트
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ nickname })
+        .eq('id', user.id)
+
+      if (profileError) {
+        console.error('Failed to update profiles table:', profileError)
+      }
+
+      setOriginalNickname(nickname)
       setIsEditing(false)
       alert('프로필이 업데이트되었습니다.')
     } catch (err) {
@@ -99,7 +144,7 @@ export function Profile() {
   }
 
   const handleCancel = () => {
-    setNickname(user?.user_metadata?.nickname || '')
+    setNickname(originalNickname)
     setBio(user?.user_metadata?.bio || '')
     setSnsLinks({
       instagram: user?.user_metadata?.instagram || '',

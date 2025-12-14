@@ -2440,9 +2440,11 @@
   background: var(--bg-panel);
   border-radius: 16px;
   width: 90%;
-  max-width: 500px;
-  max-height: 85vh;
-  overflow-y: auto;
+  max-width: 550px !important;
+  max-height: 90vh !important;
+  overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
 }
 
 .modal-header {
@@ -2462,6 +2464,15 @@
   padding: 20px;
   overflow-y: auto;
   max-height: calc(80vh - 60px);
+}
+
+/* 방 정보, 승인 요청, 방 설정 모달 - 내용이 잘리지 않도록 */
+.room-info-modal .modal-body,
+.pending-requests-modal .modal-body,
+.room-settings-modal .modal-body {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  max-height: none !important;
 }
 
 /* Host Actions in Modal */
@@ -2530,9 +2541,9 @@
   background: var(--bg-panel);
   border-radius: 16px;
   width: 90%;
-  max-width: 500px;
-  max-height: 80vh;
-  overflow: hidden;
+  max-width: 650px !important;
+  max-height: none !important;
+  overflow: visible !important;
 }
 
 .modal-description {
