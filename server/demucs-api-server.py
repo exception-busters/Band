@@ -36,17 +36,19 @@ async def health():
 @app.post("/api/separate")
 async def separate_audio(
     audio: UploadFile = File(...),
-    model: str = Form("htdemucs"),
-    shifts: int = Form(1),
+    model: str = Form("htdemucs_ft"),
+    shifts: int = Form(2),
+    overlap: float = Form(0.25),
     split: bool = Form(True)
 ):
     """
-    음원 분리 API
+    음원 분리 API (4-stem: vocals, drums, bass, other)
 
     Parameters:
     - audio: 업로드할 오디오 파일
-    - model: 사용할 모델 (htdemucs, htdemucs_ft, htdemucs_6s)
-    - shifts: Random shifts (기본값: 1)
+    - model: 사용할 모델 (htdemucs_ft 권장, 고품질 4-stem 분리)
+    - shifts: Random shifts (기본값: 2, 높을수록 정확도↑ 처리시간↑)
+    - overlap: 세그먼트 겹침 비율 (기본값: 0.25, 높을수록 부드러운 결과)
     - split: Split audio (기본값: True)
     """
 
@@ -69,7 +71,9 @@ async def separate_audio(
             python_cmd,
             script_path,
             input_path,
-            output_dir
+            output_dir,
+            '--shifts', str(shifts),
+            '--overlap', str(overlap)
         ]
 
         try:
@@ -79,7 +83,7 @@ async def separate_audio(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=600  # 10분 타임아웃
+                timeout=1200  # 20분 타임아웃
             )
 
             print(f"[DEMUCS] Return code: {result.returncode}")
@@ -97,7 +101,7 @@ async def separate_audio(
 
             # 출력 파일 찾기
             song_name = Path(audio.filename).stem
-            separated_path = os.path.join(output_dir, "htdemucs_6s", song_name)
+            separated_path = os.path.join(output_dir, "htdemucs_ft", song_name)
 
             # 파일 목록 (base64로 인코딩하여 반환)
             stems = {}
@@ -151,10 +155,16 @@ async def custom_docs():
             "url": "/api/separate",
             "body": {
                 "audio": "오디오 파일 (multipart/form-data)",
-                "model": "htdemucs (선택)",
-                "shifts": "1 (선택)",
+                "model": "htdemucs_6s (선택, 6개 악기 분리)",
+                "shifts": "5 (선택, 높을수록 정확도↑ 처리시간↑)",
+                "overlap": "0.5 (선택, 높을수록 부드러운 결과)",
                 "split": "true (선택)"
             }
+        },
+        "tips": {
+            "정확도 우선": "shifts=5, overlap=0.5 (처리시간 약 5배)",
+            "속도 우선": "shifts=1, overlap=0.1 (빠르지만 정확도↓)",
+            "균형": "shifts=2, overlap=0.25 (기본값, 권장)"
         }
     }
 

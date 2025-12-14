@@ -87,14 +87,13 @@ export async function deleteMusicFile(fileName: string): Promise<void> {
 
 /**
  * 음원 분리 관련 타입
+ * 4-stem 모델 (htdemucs_ft): vocals, drums, bass, other
  */
 export interface SeparatedStems {
   vocals?: string
   drums?: string
   bass?: string
-  other?: string
-  piano?: string
-  guitar?: string
+  other?: string  // piano, guitar 등이 포함됨
 }
 
 export interface SeparationResponse {
@@ -107,15 +106,47 @@ export interface SeparationResponse {
 }
 
 /**
+ * 음원 분리 옵션
+ */
+export interface SeparationOptions {
+  /**
+   * 랜덤 시프트 횟수 (높을수록 정확도↑ 처리시간↑)
+   * - 1: 빠름 (정확도 낮음)
+   * - 2: 균형 (기본값, 권장)
+   * - 5: 정확도 우선 (처리시간 약 5배)
+   */
+  shifts?: number
+  /**
+   * 세그먼트 겹침 비율 (0~1, 높을수록 부드러운 결과)
+   * - 0.1: 속도 우선
+   * - 0.25: 균형 (기본값)
+   * - 0.5: 정확도 우선
+   */
+  overlap?: number
+}
+
+/**
  * MP3 파일을 세션별로 분리 (Demucs API 사용)
  * @param file - MP3 파일
+ * @param options - 분리 옵션 (shifts, overlap)
  * @returns 분리된 스템 정보
  */
-export async function separateAudioStems(file: File): Promise<SeparationResponse> {
+export async function separateAudioStems(
+  file: File,
+  options?: SeparationOptions
+): Promise<SeparationResponse> {
   try {
     const formData = new FormData()
     formData.append('audio', file)  // Demucs 서버는 'audio' 필드 사용
-    formData.append('model', 'htdemucs')
+    formData.append('model', 'htdemucs_ft')  // 4-stem 고품질 모델 사용
+
+    // 정확도 향상 파라미터 (서버 기본값: shifts=5, overlap=0.5)
+    if (options?.shifts !== undefined) {
+      formData.append('shifts', String(options.shifts))
+    }
+    if (options?.overlap !== undefined) {
+      formData.append('overlap', String(options.overlap))
+    }
 
     const response = await fetch(`${DEMUCS_API_URL}/api/separate`, {
       method: 'POST',

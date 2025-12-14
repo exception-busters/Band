@@ -1,17 +1,30 @@
 """
 Demucs 음원 분리 스크립트 (soundfile 백엔드 강제 사용)
+
+파라미터:
+- shifts: 랜덤 시프트 횟수 (높을수록 정확도 ↑, 처리시간 ↑) 기본값: 2
+- overlap: 세그먼트 겹침 비율 (0~1, 높을수록 부드러운 결과) 기본값: 0.25
 """
 import sys
 import os
 import json
+import argparse
 
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: python demucs_separate.py <input_file> <output_dir>", file=sys.stderr)
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description='Demucs 음원 분리')
+    parser.add_argument('input_file', help='입력 오디오 파일 경로')
+    parser.add_argument('output_dir', help='출력 디렉토리 경로')
+    parser.add_argument('--shifts', type=int, default=2, help='랜덤 시프트 횟수 (기본값: 2)')
+    parser.add_argument('--overlap', type=float, default=0.25, help='세그먼트 겹침 비율 (기본값: 0.25)')
+    parser.add_argument('--segment', type=float, default=None, help='세그먼트 길이(초), None이면 모델 기본값')
 
-    input_file = sys.argv[1]
-    output_dir = sys.argv[2]
+    args = parser.parse_args()
+
+    input_file = args.input_file
+    output_dir = args.output_dir
+    shifts = args.shifts
+    overlap = args.overlap
+    segment = args.segment
 
     # 환경 변수 설정 - soundfile 백엔드 강제
     os.environ['TORCHAUDIO_BACKEND'] = 'soundfile'
@@ -33,13 +46,15 @@ def main():
 
     print(f"[DEMUCS] 음원 분리 시작: {input_file}", file=sys.stderr)
     print(f"[DEMUCS] 출력 디렉토리: {output_dir}", file=sys.stderr)
+    print(f"[DEMUCS] 파라미터 - shifts: {shifts}, overlap: {overlap}, segment: {segment}", file=sys.stderr)
 
-    # 모델 로드 (6-stem 모델 사용: vocals, drums, bass, piano, guitar, other)
+    # 모델 로드 (4-stem 모델 사용: vocals, drums, bass, other)
+    # htdemucs_ft: Fine-tuned 버전, 품질이 더 높음
     try:
-        model = get_model('htdemucs_6s')
+        model = get_model('htdemucs_ft')
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         model.to(device)
-        print(f"[DEMUCS] 6-stem 모델 로드 완료. Device: {device}", file=sys.stderr)
+        print(f"[DEMUCS] 4-stem (htdemucs_ft) 모델 로드 완료. Device: {device}", file=sys.stderr)
     except Exception as e:
         print(f"[DEMUCS] 모델 로드 실패: {e}", file=sys.stderr)
         sys.exit(1)
@@ -80,7 +95,17 @@ def main():
         wav = wav.unsqueeze(0)  # 배치 차원 추가
 
         with torch.no_grad():
-            sources = apply_model(model, wav, device=device)[0]
+            # shifts: 여러 번 분리 후 평균 → 정확도 향상
+            # overlap: 세그먼트 겹침 → 부드러운 결과
+            sources = apply_model(
+                model,
+                wav,
+                device=device,
+                shifts=shifts,
+                overlap=overlap,
+                segment=segment,
+                progress=True
+            )[0]
 
         print(f"[DEMUCS] 음원 분리 완료", file=sys.stderr)
     except Exception as e:
@@ -93,7 +118,7 @@ def main():
     try:
         # 출력 디렉토리 생성
         base_name = Path(input_file).stem
-        output_path = Path(output_dir) / 'htdemucs_6s' / base_name
+        output_path = Path(output_dir) / 'htdemucs_ft' / base_name
         output_path.mkdir(parents=True, exist_ok=True)
 
         stem_names = model.sources  # 모델에 정의된 스템 이름 사용
