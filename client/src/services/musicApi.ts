@@ -87,13 +87,16 @@ export async function deleteMusicFile(fileName: string): Promise<void> {
 
 /**
  * 음원 분리 관련 타입
- * 4-stem 모델 (htdemucs_ft): vocals, drums, bass, other
+ * 2단계 분리: htdemucs_ft (4-stem) + htdemucs_6s (6-stem)
+ * 최종 출력: vocals, drums, bass, piano, guitar, other
  */
 export interface SeparatedStems {
   vocals?: string
   drums?: string
   bass?: string
-  other?: string  // piano, guitar 등이 포함됨
+  piano?: string
+  guitar?: string
+  other?: string
 }
 
 export interface SeparationResponse {
@@ -126,7 +129,10 @@ export interface SeparationOptions {
 }
 
 /**
- * MP3 파일을 세션별로 분리 (Demucs API 사용)
+ * MP3 파일을 세션별로 분리
+ * - 개발: 직접 Python Demucs API 호출 (VITE_DEMUCS_API_URL)
+ * - 배포: Node.js 백엔드 경유 (프로바이더 자동 선택)
+ *
  * @param file - MP3 파일
  * @param options - 분리 옵션 (shifts, overlap)
  * @returns 분리된 스템 정보
@@ -135,12 +141,28 @@ export async function separateAudioStems(
   file: File,
   options?: SeparationOptions
 ): Promise<SeparationResponse> {
+  // 배포 환경이면 Node.js 백엔드 사용
+  const useBackend = import.meta.env.VITE_USE_BACKEND_DEMUCS === 'true'
+
+  if (useBackend) {
+    return separateViaBackend(file, options)
+  } else {
+    return separateViaPythonAPI(file, options)
+  }
+}
+
+/**
+ * Python Demucs API 직접 호출 (개발용)
+ */
+async function separateViaPythonAPI(
+  file: File,
+  options?: SeparationOptions
+): Promise<SeparationResponse> {
   try {
     const formData = new FormData()
-    formData.append('audio', file)  // Demucs 서버는 'audio' 필드 사용
-    formData.append('model', 'htdemucs_ft')  // 4-stem 고품질 모델 사용
+    formData.append('audio', file)
+    formData.append('model', 'htdemucs_2stage')
 
-    // 정확도 향상 파라미터 (서버 기본값: shifts=5, overlap=0.5)
     if (options?.shifts !== undefined) {
       formData.append('shifts', String(options.shifts))
     }
@@ -159,7 +181,6 @@ export async function separateAudioStems(
       throw new Error(data.error || `Separation failed: ${response.status}`)
     }
 
-    // Demucs 서버 응답을 클라이언트 형식으로 변환
     return {
       success: data.success,
       stems: data.stems,
@@ -167,7 +188,53 @@ export async function separateAudioStems(
       message: `Separated using ${data.model}`
     }
   } catch (error) {
-    console.error('Separation error:', error)
+    console.error('Separation error (Python API):', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }
+  }
+}
+
+/**
+ * Node.js 백엔드 경유 (배포용 - HuggingFace/Replicate 프로바이더 사용)
+ */
+async function separateViaBackend(
+  file: File,
+  options?: SeparationOptions
+): Promise<SeparationResponse> {
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await fetch(`${API_BASE_URL}/api/music/separate-stems`, {
+      method: 'POST',
+      body: formData
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || `Separation failed: ${response.status}`)
+    }
+
+    // 백엔드는 파일 경로를 반환하므로 URL로 변환
+    const stems: SeparatedStems = {}
+    if (data.stems) {
+      for (const [key, fileName] of Object.entries(data.stems)) {
+        stems[key as keyof SeparatedStems] = `${API_BASE_URL}/uploads/${fileName}`
+      }
+    }
+
+    return {
+      success: data.success,
+      stems,
+      availableStems: data.availableStems,
+      originalFile: data.originalFile,
+      message: data.message
+    }
+  } catch (error) {
+    console.error('Separation error (Backend):', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'

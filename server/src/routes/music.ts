@@ -3,7 +3,7 @@ import multer from 'multer'
 import * as path from 'path'
 import * as fs from 'fs'
 import { convertMp3ToMidi } from '../services/amtService'
-import { separateAudioStems } from '../services/demucsService'
+import { separateAudioWithProvider, currentProvider } from '../services/demucsProvider'
 
 const router = express.Router()
 
@@ -209,10 +209,10 @@ router.post('/separate-stems', upload.single('file'), async (req: Request, res: 
       })
     }
 
-    console.log(`[Music Separate] 음원 분리 요청: ${file.originalname}`)
+    console.log(`[Music Separate] 음원 분리 요청: ${file.originalname} (Provider: ${currentProvider})`)
 
-    // DEMUCS API를 통해 음원 분리
-    const separationResult = await separateAudioStems(file.path)
+    // DEMUCS Provider를 통해 음원 분리
+    const separationResult = await separateAudioWithProvider(file.path)
 
     if (!separationResult.success || !separationResult.stems) {
       return res.status(500).json({

@@ -36,20 +36,23 @@ async def health():
 @app.post("/api/separate")
 async def separate_audio(
     audio: UploadFile = File(...),
-    model: str = Form("htdemucs_ft"),
+    model: str = Form("htdemucs_2stage"),
     shifts: int = Form(1),
     overlap: float = Form(0.1),
     split: bool = Form(True)
 ):
     """
-    음원 분리 API (4-stem: vocals, drums, bass, other)
+    음원 분리 API (2단계 분리: 6개 스템)
+
+    1단계: htdemucs_ft (4-stem) → vocals, drums, bass, other (고품질)
+    2단계: htdemucs_6s (6-stem) → other에서 piano, guitar, other 추출
+
+    최종 출력: vocals, drums, bass, piano, guitar, other
 
     Parameters:
     - audio: 업로드할 오디오 파일
-    - model: 사용할 모델 (htdemucs_ft 권장, 고품질 4-stem 분리)
     - shifts: Random shifts (기본값: 1, CPU에서는 1 권장)
     - overlap: 세그먼트 겹침 비율 (기본값: 0.1, CPU에서는 낮게)
-    - split: Split audio (기본값: True)
     """
 
     # 임시 디렉토리 생성
@@ -83,7 +86,7 @@ async def separate_audio(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=1200  # 20분 타임아웃
+                timeout=1800  # 30분 타임아웃 (2단계 분리)
             )
 
             print(f"[DEMUCS] Return code: {result.returncode}")
@@ -101,7 +104,7 @@ async def separate_audio(
 
             # 출력 파일 찾기
             song_name = Path(audio.filename).stem
-            separated_path = os.path.join(output_dir, "htdemucs_ft", song_name)
+            separated_path = os.path.join(output_dir, "htdemucs_2stage", song_name)
 
             # 파일 목록 (base64로 인코딩하여 반환)
             stems = {}
@@ -134,7 +137,7 @@ async def separate_audio(
         except subprocess.TimeoutExpired:
             return JSONResponse(
                 status_code=500,
-                content={"error": "Separation timeout (>10 minutes)"}
+                content={"error": "Separation timeout (>30 minutes)"}
             )
         except Exception as e:
             return JSONResponse(
