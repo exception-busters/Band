@@ -1,11 +1,38 @@
 import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import { createServer as createHttpServer } from 'http';
+import { createServer as createHttpsServer } from 'https';
 import { WebSocketServer } from 'ws';
-import { createServer } from 'https';
 import { readFileSync, existsSync } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { createClient } from '@supabase/supabase-js';
+import musicRoutes from './routes/music';
+import paymentRoutes from './routes/payment';
 
 const PORT = Number(process.env.PORT || 8080);
+
+// Express 앱 설정
+const app = express();
+app.use(cors({
+	origin: '*',
+	methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+	allowedHeaders: ['Content-Type', 'Authorization']
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// 정적 파일 서빙 (uploads 폴더)
+app.use('/uploads', express.static('uploads'));
+
+// API 라우트
+app.use('/api/music', musicRoutes);
+app.use('/api/payment', paymentRoutes);
+
+// 헬스체크
+app.get('/health', (req, res) => {
+	res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // Supabase 클라이언트 (환경 변수에서 설정)
 const supabaseUrl = process.env.SUPABASE_URL || '';
@@ -92,34 +119,34 @@ interface InstrumentChangeRequest {
 	timestamp: number;
 }
 
-// HTTPS 서버 설정 (자체 서명 인증서 사용)
+// HTTP/HTTPS 서버 설정 (Express + WebSocket)
 let wss: WebSocketServer;
 
 const certPath = './certs/cert.pem';
 const keyPath = './certs/key.pem';
 
 if (existsSync(certPath) && existsSync(keyPath)) {
-	// WSS (Secure WebSocket) 모드
-	const server = createServer(
+	// HTTPS + WSS 모드 (로컬 개발용)
+	const server = createHttpsServer(
 		{
 			cert: readFileSync(certPath),
 			key: readFileSync(keyPath),
 		},
-		(req, res) => {
-			// 브라우저에서 직접 접속 시 인증서 수락용 응답
-			res.writeHead(200, { 'Content-Type': 'text/plain' });
-			res.end('WSS Signaling Server is running. Certificate accepted!');
-		}
+		app
 	);
 	wss = new WebSocketServer({ server });
 	server.listen(PORT, () => {
 		console.log(`WSS signaling server listening on wss://localhost:${PORT}`);
 	});
 } else {
-	// WS (일반 WebSocket) 모드 - 개발용
-	wss = new WebSocketServer({ port: PORT });
-	console.log(`WS signaling server listening on ws://localhost:${PORT}`);
-	console.log('For WSS, create certs/cert.pem and certs/key.pem');
+	// HTTP + WS 모드 (배포용)
+	const server = createHttpServer(app);
+	wss = new WebSocketServer({ server });
+	server.listen(PORT, () => {
+		console.log(`HTTP + WS server listening on port ${PORT}`);
+		console.log(`- HTTP API: http://localhost:${PORT}/api`);
+		console.log(`- WebSocket: ws://localhost:${PORT}`);
+	});
 }
 const rooms = new Map<string, Set<string>>(); // roomId -> clientIds
 const clients = new Map<string, Client>(); // clientId -> client
