@@ -201,7 +201,7 @@ async function separateViaPythonAPI(
  */
 async function separateViaBackend(
   file: File,
-  options?: SeparationOptions
+  _options?: SeparationOptions
 ): Promise<SeparationResponse> {
   try {
     const formData = new FormData()
