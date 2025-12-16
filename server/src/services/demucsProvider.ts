@@ -244,13 +244,17 @@ async function separateWithReplicate(
       throw new Error(`Replicate API error: ${createResponse.status}`)
     }
 
-    const prediction = await createResponse.json()
+    const prediction = await createResponse.json() as { id: string }
 
     // 결과 폴링
-    const result = await pollReplicateResult(prediction.id)
+    const result = await pollReplicateResult(prediction.id) as { status: string; error?: string; output?: Record<string, string> }
 
     if (result.status === 'failed') {
       throw new Error(result.error || 'Replicate processing failed')
+    }
+
+    if (!result.output) {
+      throw new Error('No output from Replicate')
     }
 
     // 결과 다운로드 및 저장
@@ -281,7 +285,7 @@ async function pollReplicateResult(predictionId: string, maxAttempts = 120): Pro
       }
     })
 
-    const result = await response.json()
+    const result = await response.json() as { status: string; error?: string; output?: Record<string, string> }
 
     if (result.status === 'succeeded' || result.status === 'failed') {
       return result

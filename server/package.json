@@ -14,6 +14,12 @@
     "type": "commonjs",
     "dependencies": {
         "@supabase/supabase-js": "^2.86.0",
+        "@types/cors": "^2.8.19",
+        "@types/express": "^5.0.6",
+        "@types/multer": "^2.0.0",
+        "@types/node": "^24.5.2",
+        "@types/ws": "^8.18.1",
+        "axios": "^1.7.9",
         "cors": "^2.8.5",
         "dotenv": "^17.2.3",
         "express": "^5.2.1",
@@ -23,11 +29,6 @@
         "ws": "^8.18.3"
     },
     "devDependencies": {
-        "@types/cors": "^2.8.19",
-        "@types/express": "^5.0.6",
-        "@types/multer": "^2.0.0",
-        "@types/node": "^24.5.2",
-        "@types/ws": "^8.18.1",
         "ts-node": "^10.9.2"
     }
 }
