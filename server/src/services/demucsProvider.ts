@@ -233,7 +233,7 @@ async function separateWithReplicate(
         version: '25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953',
         input: {
           audio: `data:${mimeType};base64,${base64Audio}`,
-          model: 'htdemucs_ft',
+          model: 'htdemucs_6s',  // 6-stem: vocals, drums, bass, guitar, piano, other
           shifts: options?.shifts || 1,
           overlap: options?.overlap || 0.25
         }
