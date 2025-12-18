@@ -161,7 +161,7 @@ async function separateViaPythonAPI(
   try {
     const formData = new FormData()
     formData.append('audio', file)
-    formData.append('model', 'htdemucs_2stage')
+    formData.append('model', 'htdemucs_6s')
 
     if (options?.shifts !== undefined) {
       formData.append('shifts', String(options.shifts))

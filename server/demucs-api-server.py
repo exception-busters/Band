@@ -123,6 +123,16 @@ async def separate_audio(
             else:
                 print(f"[DEMUCS] Path does not exist: {separated_path}")
 
+            # stems가 비어있으면 에러
+            if not stems:
+                return JSONResponse(
+                    status_code=500,
+                    content={
+                        "error": "No stems found after separation",
+                        "details": f"Expected files in: {separated_path}"
+                    }
+                )
+
             return {
                 "success": True,
                 "stems": stems,

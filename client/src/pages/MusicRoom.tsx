@@ -88,7 +88,13 @@ export function MusicRoom() {
         throw new Error(result.error || '음원 분리 실패')
       }
 
-      console.log('[MusicRoom] Separation success:', result)
+      // stems가 비어있는지 확인
+      const stemKeys = Object.keys(result.stems)
+      if (stemKeys.length === 0) {
+        throw new Error('분리된 스템이 없습니다. 서버 로그를 확인하세요.')
+      }
+
+      console.log('[MusicRoom] Separation success:', result, 'stems:', stemKeys)
 
       setSeparatedStems(result.stems)
       setAvailableStems(result.availableStems || Object.keys(result.stems))
