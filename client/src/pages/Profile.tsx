@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { usePremium } from '../contexts/PremiumContext'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import './Profile.css'
@@ -8,17 +9,11 @@ type ProfileTab = 'info' | 'follow' | 'plan' | 'theme' | 'support'
 
 export function Profile() {
   const { user } = useAuth()
+  const { userPlan } = usePremium()
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('info')
-
-  // 요금제 탭 클릭 시 요금제 페이지로 이동
-  useEffect(() => {
-    if (activeTab === 'plan') {
-      navigate('/pricing')
-    }
-  }, [activeTab, navigate])
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isHoveringPhoto, setIsHoveringPhoto] = useState(false)
@@ -346,6 +341,91 @@ export function Profile() {
               <div className="coming-soon-icon">👥</div>
               <h2>팔로우/팔로워</h2>
               <p>팔로우 기능은 곧 출시될 예정입니다.</p>
+            </div>
+          )}
+
+          {activeTab === 'plan' && (
+            <div className="plan-section">
+              <h2>요금제 관리</h2>
+
+              <div className="current-plan-card">
+                <div className="plan-status">
+                  <span className="plan-label">현재 요금제</span>
+                  <span className={`plan-badge ${userPlan}`}>
+                    {userPlan === 'free' && '무료 플랜'}
+                    {userPlan === 'standard' && 'Standard 플랜'}
+                    {userPlan === 'pro' && 'Pro 플랜'}
+                  </span>
+                </div>
+
+                <div className="plan-details">
+                  {userPlan === 'free' && (
+                    <>
+                      <p className="plan-description">기본 기능을 무료로 이용 중입니다.</p>
+                      <ul className="plan-features-list">
+                        <li>합주실 생성 (최대 4명)</li>
+                        <li>녹음 기능 & 로컬 저장</li>
+                        <li>기본 오디오 품질</li>
+                      </ul>
+                    </>
+                  )}
+                  {userPlan === 'standard' && (
+                    <>
+                      <p className="plan-description">Standard 플랜을 이용 중입니다.</p>
+                      <ul className="plan-features-list">
+                        <li>합주실 생성 (최대 6명)</li>
+                        <li>비공개 방 생성</li>
+                        <li>클라우드 저장 (30일)</li>
+                        <li>Mix Lab 기본 기능</li>
+                      </ul>
+                    </>
+                  )}
+                  {userPlan === 'pro' && (
+                    <>
+                      <p className="plan-description">Pro 플랜을 이용 중입니다.</p>
+                      <ul className="plan-features-list">
+                        <li>합주실 생성 (최대 8명)</li>
+                        <li>클라우드 저장 무제한</li>
+                        <li>자동 믹싱 & 고급 Mix Lab</li>
+                        <li>팀/밴드 관리 기능</li>
+                      </ul>
+                    </>
+                  )}
+                </div>
+
+                <div className="plan-actions">
+                  <button
+                    className="btn-primary"
+                    onClick={() => navigate('/pricing')}
+                  >
+                    {userPlan === 'free' ? '요금제 업그레이드' : '요금제 변경'}
+                  </button>
+                </div>
+              </div>
+
+              {userPlan !== 'free' && (
+                <div className="subscription-info">
+                  <h3>구독 정보</h3>
+                  <div className="info-row">
+                    <span className="info-label">결제 주기</span>
+                    <span className="info-value">월간 구독</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">다음 결제일</span>
+                    <span className="info-value">-</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">결제 수단</span>
+                    <span className="info-value">등록된 결제 수단 없음</span>
+                  </div>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => navigate('/pricing')}
+                  >
+                    결제 수단 관리
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

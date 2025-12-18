@@ -345,6 +345,115 @@
   transform: scale(1.05);
 }
 
+/* 요금제 섹션 */
+.plan-section {
+  color: #fff;
+}
+
+.plan-section h2 {
+  margin: 0 0 2rem;
+  font-size: 1.75rem;
+}
+
+.current-plan-card {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+
+.plan-status {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.plan-label {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.9rem;
+}
+
+.plan-badge {
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.plan-badge.free {
+  background: linear-gradient(135deg, #6b7280 0%, #9ca3af 100%);
+}
+
+.plan-badge.standard {
+  background: linear-gradient(135deg, #8d7bff 0%, #a89fff 100%);
+}
+
+.plan-badge.pro {
+  background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+  color: #1a1a2e;
+}
+
+.plan-details {
+  margin-bottom: 1.5rem;
+}
+
+.plan-description {
+  margin: 0 0 1rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1rem;
+}
+
+.plan-features-list {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.plan-features-list li {
+  margin-bottom: 0.5rem;
+}
+
+.plan-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+/* 구독 정보 */
+.subscription-info {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.subscription-info h3 {
+  margin: 0 0 1.5rem;
+  font-size: 1.25rem;
+  color: #fff;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.info-row:last-of-type {
+  border-bottom: none;
+  margin-bottom: 1.5rem;
+}
+
+.info-label {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.info-value {
+  color: #fff;
+  font-weight: 500;
+}
+
 /* 반응형 */
 @media (max-width: 1024px) {
   .profile-container {

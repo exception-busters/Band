@@ -31,14 +31,14 @@ export function PlanStatus({ showUpgrade = true, compact = false }: PlanStatusPr
 
   if (compact) {
     return (
-      <div className="plan-status-compact">
-        <span 
+      <Link to="/pricing" className="plan-status-compact">
+        <span
           className="plan-badge-compact"
           style={{ backgroundColor: currentPlan.color }}
         >
           {currentPlan.name}
         </span>
-      </div>
+      </Link>
     )
   }
 
