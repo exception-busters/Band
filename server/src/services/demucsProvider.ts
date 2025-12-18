@@ -229,11 +229,11 @@ async function separateWithReplicate(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        // Demucs 모델 버전 (htdemucs)
-        version: 'cdd19a3d70a6b3c19b24e07dbf5f3e5e5b5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c',
+        // cjwbw/demucs 모델 (Hybrid Transformer Demucs)
+        version: '25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953',
         input: {
           audio: `data:${mimeType};base64,${base64Audio}`,
-          stems: 'all',
+          model: 'htdemucs_ft',
           shifts: options?.shifts || 1,
           overlap: options?.overlap || 0.25
         }
