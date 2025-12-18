@@ -70,8 +70,10 @@ export class MultiTrackPlayer {
 
     // 모든 스템 로드 (병렬)
     const loadPromises = Object.entries(stems).map(async ([stemName, stemUrl]) => {
-      // base64 data URL인 경우 직접 사용, 아니면 getMusicFileUrl 사용
-      const url = stemUrl.startsWith('data:') ? stemUrl : getMusicFileUrl(stemUrl)
+      // data URL, 전체 URL(http/https)은 그대로 사용, 파일명만 있으면 getMusicFileUrl 사용
+      const url = stemUrl.startsWith('data:') || stemUrl.startsWith('http')
+        ? stemUrl
+        : getMusicFileUrl(stemUrl)
 
       try {
         let arrayBuffer: ArrayBuffer
