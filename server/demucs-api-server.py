@@ -36,18 +36,15 @@ async def health():
 @app.post("/api/separate")
 async def separate_audio(
     audio: UploadFile = File(...),
-    model: str = Form("htdemucs_2stage"),
+    model: str = Form("htdemucs_6s"),
     shifts: int = Form(1),
     overlap: float = Form(0.1),
     split: bool = Form(True)
 ):
     """
-    음원 분리 API (2단계 분리: 6개 스템)
+    음원 분리 API (htdemucs_6s: 6개 스템)
 
-    1단계: htdemucs_ft (4-stem) → vocals, drums, bass, other (고품질)
-    2단계: htdemucs_6s (6-stem) → other에서 piano, guitar, other 추출
-
-    최종 출력: vocals, drums, bass, piano, guitar, other
+    출력: vocals, drums, bass, piano, guitar, other
 
     Parameters:
     - audio: 업로드할 오디오 파일
@@ -104,7 +101,7 @@ async def separate_audio(
 
             # 출력 파일 찾기
             song_name = Path(audio.filename).stem
-            separated_path = os.path.join(output_dir, "htdemucs_2stage", song_name)
+            separated_path = os.path.join(output_dir, "htdemucs_6s", song_name)
 
             # 파일 목록 (base64로 인코딩하여 반환)
             stems = {}
