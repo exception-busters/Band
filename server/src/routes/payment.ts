@@ -125,16 +125,22 @@ router.post('/cancel', async (req, res) => {
 router.get('/subscription/:userId', (req, res) => {
   try {
     const { userId } = req.params
-    
+
     const user = subscriptionService.getUser(userId)
+
+    // 사용자가 없으면 기본 Free 플랜 반환
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: '사용자를 찾을 수 없습니다.'
+      return res.json({
+        success: true,
+        user: {
+          id: userId,
+          planType: 'free',
+          subscription: null
+        }
       })
     }
 
-    const subscription = user.subscriptionId 
+    const subscription = user.subscriptionId
       ? subscriptionService.getSubscription(user.subscriptionId)
       : null
 
