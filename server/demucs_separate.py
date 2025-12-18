@@ -1,10 +1,7 @@
 """
-Demucs 2단계 음원 분리 스크립트
+Demucs 6-stem 음원 분리 스크립트
 
-1단계: htdemucs_ft (4-stem) → vocals, drums, bass, other (고품질)
-2단계: htdemucs_6s (6-stem) → other에서 piano, guitar, other 추출
-
-최종 출력: vocals, drums, bass, piano, guitar, other (6개 스템)
+htdemucs_6s 모델 사용: vocals, drums, bass, guitar, piano, other
 
 파라미터:
 - shifts: 랜덤 시프트 횟수 (기본값: 1, CPU에서는 1 권장)
@@ -16,7 +13,7 @@ import json
 import argparse
 
 def main():
-    parser = argparse.ArgumentParser(description='Demucs 2단계 음원 분리')
+    parser = argparse.ArgumentParser(description='Demucs 6-stem 음원 분리')
     parser.add_argument('input_file', help='입력 오디오 파일 경로')
     parser.add_argument('output_dir', help='출력 디렉토리 경로')
     parser.add_argument('--shifts', type=int, default=1, help='랜덤 시프트 횟수 (기본값: 1, CPU에서는 1 권장)')
@@ -69,20 +66,21 @@ def main():
 
     print(f"[DEMUCS] ===================================\n", file=sys.stderr)
 
-    print(f"[DEMUCS] 2단계 음원 분리 시작: {input_file}", file=sys.stderr)
+    print(f"[DEMUCS] 6-stem 음원 분리 시작: {input_file}", file=sys.stderr)
     print(f"[DEMUCS] 출력 디렉토리: {output_dir}", file=sys.stderr)
     print(f"[DEMUCS] 파라미터 - shifts: {shifts}, overlap: {overlap}, segment: {segment}", file=sys.stderr)
     print(f"[DEMUCS] Device: {device}", file=sys.stderr)
 
-    # ========== 1단계: 4-stem 분리 (htdemucs_ft) ==========
-    print(f"\n[DEMUCS] === 1단계: 4-stem 분리 (htdemucs_ft) ===", file=sys.stderr)
+    # ========== 6-stem 분리 (htdemucs_6s) ==========
+    print(f"\n[DEMUCS] === 6-stem 분리 (htdemucs_6s) ===", file=sys.stderr)
 
     try:
-        model_4stem = get_model('htdemucs_ft')
-        model_4stem.to(device)
-        print(f"[DEMUCS] 4-stem 모델 로드 완료", file=sys.stderr)
+        model = get_model('htdemucs_6s')
+        model.to(device)
+        print(f"[DEMUCS] 6-stem 모델 로드 완료", file=sys.stderr)
+        print(f"[DEMUCS] 출력 스템: {model.sources}", file=sys.stderr)
     except Exception as e:
-        print(f"[DEMUCS] 4-stem 모델 로드 실패: {e}", file=sys.stderr)
+        print(f"[DEMUCS] 모델 로드 실패: {e}", file=sys.stderr)
         sys.exit(1)
 
     # 오디오 파일 로드
@@ -96,10 +94,10 @@ def main():
 
         wav = torch.from_numpy(audio_data).to(device)
 
-        if sample_rate != model_4stem.samplerate:
-            print(f"[DEMUCS] 리샘플링: {sample_rate}Hz -> {model_4stem.samplerate}Hz", file=sys.stderr)
+        if sample_rate != model.samplerate:
+            print(f"[DEMUCS] 리샘플링: {sample_rate}Hz -> {model.samplerate}Hz", file=sys.stderr)
             import torchaudio.transforms as T
-            resampler = T.Resample(sample_rate, model_4stem.samplerate).to(device)
+            resampler = T.Resample(sample_rate, model.samplerate).to(device)
             wav = resampler(wav)
 
         print(f"[DEMUCS] 오디오 로드 완료. Shape: {wav.shape}", file=sys.stderr)
@@ -107,13 +105,13 @@ def main():
         print(f"[DEMUCS] 오디오 로드 실패: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # 1단계 분리 실행
+    # 분리 실행
     try:
         wav_batch = wav.unsqueeze(0)
 
         with torch.no_grad():
-            sources_4stem = apply_model(
-                model_4stem,
+            sources = apply_model(
+                model,
                 wav_batch,
                 device=device,
                 shifts=shifts,
@@ -122,45 +120,9 @@ def main():
                 progress=True
             )[0]
 
-        print(f"[DEMUCS] 1단계 완료: {model_4stem.sources}", file=sys.stderr)
+        print(f"[DEMUCS] 분리 완료: {model.sources}", file=sys.stderr)
     except Exception as e:
-        print(f"[DEMUCS] 1단계 분리 실패: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    # 1단계 결과에서 other 트랙 추출
-    stem_names_4stem = model_4stem.sources  # ['drums', 'bass', 'other', 'vocals']
-    other_idx = stem_names_4stem.index('other')
-    other_audio = sources_4stem[other_idx]  # (channels, samples)
-
-    # ========== 2단계: other에서 piano, guitar, other 분리 (htdemucs_6s) ==========
-    print(f"\n[DEMUCS] === 2단계: other에서 piano/guitar 분리 (htdemucs_6s) ===", file=sys.stderr)
-
-    try:
-        model_6stem = get_model('htdemucs_6s')
-        model_6stem.to(device)
-        print(f"[DEMUCS] 6-stem 모델 로드 완료", file=sys.stderr)
-    except Exception as e:
-        print(f"[DEMUCS] 6-stem 모델 로드 실패: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    # 2단계 분리 실행 (other 트랙에서)
-    try:
-        other_batch = other_audio.unsqueeze(0)
-
-        with torch.no_grad():
-            sources_6stem = apply_model(
-                model_6stem,
-                other_batch,
-                device=device,
-                shifts=shifts,
-                overlap=overlap,
-                segment=segment,
-                progress=True
-            )[0]
-
-        print(f"[DEMUCS] 2단계 완료: {model_6stem.sources}", file=sys.stderr)
-    except Exception as e:
-        print(f"[DEMUCS] 2단계 분리 실패: {e}", file=sys.stderr)
+        print(f"[DEMUCS] 분리 실패: {e}", file=sys.stderr)
         sys.exit(1)
 
     # ========== 결과 저장 ==========
@@ -168,19 +130,16 @@ def main():
 
     try:
         base_name = Path(input_file).stem
-        output_path = Path(output_dir) / 'htdemucs_2stage' / base_name
+        output_path = Path(output_dir) / 'htdemucs_6s' / base_name
         output_path.mkdir(parents=True, exist_ok=True)
 
         results = {}
-        samplerate = model_4stem.samplerate
+        samplerate = model.samplerate
+        stem_names = model.sources  # ['drums', 'bass', 'other', 'vocals', 'guitar', 'piano']
 
-        # 1단계 결과 저장 (vocals, drums, bass)
-        for i, name in enumerate(stem_names_4stem):
-            if name == 'other':
-                continue  # other는 2단계 결과 사용
-
+        for i, name in enumerate(stem_names):
             stem_path = output_path / f'{name}.wav'
-            stem_audio = sources_4stem[i].cpu().numpy()
+            stem_audio = sources[i].cpu().numpy()
 
             if stem_audio.ndim > 1:
                 stem_audio = stem_audio.T
@@ -188,22 +147,6 @@ def main():
             sf.write(str(stem_path), stem_audio, samplerate)
             results[name] = str(stem_path)
             print(f"[DEMUCS] {name} 저장: {stem_path}", file=sys.stderr)
-
-        # 2단계 결과 저장 (piano, guitar, other)
-        stem_names_6stem = model_6stem.sources  # ['drums', 'bass', 'other', 'vocals', 'guitar', 'piano']
-
-        for target_stem in ['piano', 'guitar', 'other']:
-            if target_stem in stem_names_6stem:
-                idx = stem_names_6stem.index(target_stem)
-                stem_path = output_path / f'{target_stem}.wav'
-                stem_audio = sources_6stem[idx].cpu().numpy()
-
-                if stem_audio.ndim > 1:
-                    stem_audio = stem_audio.T
-
-                sf.write(str(stem_path), stem_audio, samplerate)
-                results[target_stem] = str(stem_path)
-                print(f"[DEMUCS] {target_stem} 저장: {stem_path}", file=sys.stderr)
 
         # 결과를 JSON으로 출력
         print(json.dumps(results))
