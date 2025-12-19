@@ -257,10 +257,6 @@ async function separateWithReplicate(
       throw new Error('No output from Replicate')
     }
 
-    // 디버그: Replicate 응답 로깅
-    console.log('[DEMUCS-Replicate] Output keys:', Object.keys(result.output))
-    console.log('[DEMUCS-Replicate] Full output:', JSON.stringify(result.output, null, 2))
-
     // 결과 다운로드 및 저장
     const stems = await downloadReplicateStems(result.output, filePath)
 
