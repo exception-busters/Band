@@ -5,6 +5,56 @@ import { useAuth } from './AuthContext'
 const SIGNALING_URL = import.meta.env.VITE_SIGNALING_URL ?? 'ws://localhost:8080'
 const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
 
+/**
+ * SDP를 수정하여 저지연 오디오 최적화 적용
+ * - Opus ptime을 10ms로 설정 (기본 20ms → 10ms)
+ * - stereo 비활성화 (모노로 전송)
+ * - FEC 비활성화 (지연 감소, 패킷 손실에 취약해짐)
+ * - DTX 비활성화 (무음 구간에도 패킷 전송)
+ */
+function optimizeSdpForLowLatency(sdp: string): string {
+  let optimizedSdp = sdp
+
+  // Opus 코덱의 fmtp 라인 찾아서 수정
+  // a=fmtp:111 ... 형식
+  optimizedSdp = optimizedSdp.replace(
+    /(a=fmtp:111 .+)/g,
+    (match) => {
+      let newFmtp = match
+      // ptime이 없으면 추가 (10ms 패킷)
+      if (!newFmtp.includes('ptime=')) {
+        newFmtp += ';ptime=10'
+      }
+      // maxptime이 없으면 추가
+      if (!newFmtp.includes('maxptime=')) {
+        newFmtp += ';maxptime=10'
+      }
+      // stereo 비활성화
+      if (!newFmtp.includes('stereo=')) {
+        newFmtp += ';stereo=0'
+      }
+      // FEC 비활성화 (레이턴시 감소)
+      if (!newFmtp.includes('useinbandfec=')) {
+        newFmtp += ';useinbandfec=0'
+      }
+      // DTX 비활성화 (무음에서도 패킷 전송)
+      if (!newFmtp.includes('usedtx=')) {
+        newFmtp += ';usedtx=0'
+      }
+      return newFmtp
+    }
+  )
+
+  // a=ptime 라인이 있으면 10으로 수정
+  optimizedSdp = optimizedSdp.replace(/a=ptime:\d+/g, 'a=ptime:10')
+
+  // a=maxptime 라인이 있으면 10으로 수정
+  optimizedSdp = optimizedSdp.replace(/a=maxptime:\d+/g, 'a=maxptime:10')
+
+  console.log('[RTC] SDP optimized for low latency')
+  return optimizedSdp
+}
+
 type RtcStatus = 'idle' | 'connecting' | 'live' | 'error'
 type SignalStatus = 'idle' | 'connecting' | 'connected' | 'error'
 
@@ -222,8 +272,14 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
   const getAudioContext = (): AudioContext => {
     if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-      audioContextRef.current = new AudioContext()
-      console.log('[AUDIO] Created new AudioContext')
+      // latencyHint: 'interactive'로 최소 레이턴시 설정
+      audioContextRef.current = new AudioContext({
+        latencyHint: 'interactive',  // 최소 레이턴시 모드
+        sampleRate: 48000,           // 고정 샘플레이트
+      })
+      console.log('[AUDIO] Created new AudioContext with interactive latency hint')
+      console.log('[AUDIO] Base latency:', audioContextRef.current.baseLatency, 's')
+      console.log('[AUDIO] Output latency:', audioContextRef.current.outputLatency, 's')
     }
     return audioContextRef.current
   }
@@ -612,9 +668,16 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         setRtcStatus('connecting')
       }
       const offer = await pc.createOffer()
-      await pc.setLocalDescription(offer)
-      console.log('[RTC] Offer created and sent to:', peerId.slice(0, 8))
-      sendSignalMessage({ type: 'offer', to: peerId, offer })
+
+      // SDP 최적화 적용 (저지연)
+      const optimizedOffer = {
+        ...offer,
+        sdp: optimizeSdpForLowLatency(offer.sdp || '')
+      }
+
+      await pc.setLocalDescription(optimizedOffer)
+      console.log('[RTC] Offer created (optimized) and sent to:', peerId.slice(0, 8))
+      sendSignalMessage({ type: 'offer', to: peerId, offer: optimizedOffer })
     } catch (error) {
       console.error('[RTC] createOfferForPeer error:', error)
       setRtcStatus('error')
@@ -665,9 +728,16 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       await applyPendingCandidates(peerId, pc)
       attachLocalTracks(pc)
       const answer = await pc.createAnswer()
-      await pc.setLocalDescription(answer)
-      console.log('[RTC] Answer created and sent to:', peerId.slice(0, 8), 'iceGatheringState:', pc.iceGatheringState)
-      sendSignalMessage({ type: 'answer', to: peerId, answer })
+
+      // SDP 최적화 적용 (저지연)
+      const optimizedAnswer = {
+        ...answer,
+        sdp: optimizeSdpForLowLatency(answer.sdp || '')
+      }
+
+      await pc.setLocalDescription(optimizedAnswer)
+      console.log('[RTC] Answer created (optimized) and sent to:', peerId.slice(0, 8), 'iceGatheringState:', pc.iceGatheringState)
+      sendSignalMessage({ type: 'answer', to: peerId, answer: optimizedAnswer })
       // 이미 connected 상태면 connecting으로 바꾸지 않음
       if (pc.connectionState !== 'connected') {
         setRtcStatus('connecting')
@@ -762,8 +832,11 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       const trackSettings = audioTrack?.getSettings()
 
       if (trackSettings?.channelCount === 2 && audioSettings.stereoMode === 'mono') {
-        // Web Audio API로 스테레오 → 모노 변환
-        const audioContext = new AudioContext({ sampleRate: audioSettings.sampleRate })
+        // Web Audio API로 스테레오 → 모노 변환 (최소 레이턴시)
+        const audioContext = new AudioContext({
+          sampleRate: audioSettings.sampleRate,
+          latencyHint: 'interactive'
+        })
         const source = audioContext.createMediaStreamSource(rawStream)
 
         // 스테레오를 모노로 믹싱하는 노드 생성
