@@ -370,11 +370,11 @@ wss.on('connection', (ws) => {
 				return;
 			}
 
-			// WebRTC 시그널링
-			if (['offer', 'answer', 'ice-candidate'].includes(msg.type) && typeof msg.to === 'string') {
+			// WebRTC 시그널링 + P2P discovery
+			if (['offer', 'answer', 'ice-candidate', 'p2p-discovery', 'p2p-discovery-response'].includes(msg.type) && typeof msg.to === 'string') {
 				const to = clients.get(msg.to);
 				if (to) {
-					console.log(`[RTC] ${msg.type} from ${id.slice(0, 8)} to ${msg.to.slice(0, 8)}`);
+					console.log(`[SIGNAL] ${msg.type} from ${id.slice(0, 8)} to ${msg.to.slice(0, 8)}`);
 					send(to.ws, { ...msg, from: id });
 				}
 				return;
