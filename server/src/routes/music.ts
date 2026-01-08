@@ -4,6 +4,7 @@ import * as path from 'path'
 import * as fs from 'fs'
 import { convertMp3ToMidi } from '../services/amtService'
 import { separateAudioWithProvider, currentProvider } from '../services/demucsProvider'
+import { convertPdfToMusicXml } from '../services/omrService'
 
 const router = express.Router()
 
@@ -18,15 +19,32 @@ const storage = multer.diskStorage({
     cb(null, uploadDir)
   },
   filename: (req, file, cb) => {
-    // 파일명: timestamp_originalname
-    const uniqueName = `${Date.now()}_${file.originalname}`
-    cb(null, uniqueName)
+    // 한글 파일명 문제 해결: ASCII만 사용
+    // 원본 파일명에서 확장자 추출
+    const ext = path.extname(file.originalname)
+
+    // 원본 파일명에서 확장자를 제외한 부분 추출
+    const nameWithoutExt = path.basename(file.originalname, ext)
+
+    // 한글 및 특수문자를 제거하고 영문/숫자/하이픈/언더스코어만 남김
+    const sanitizedName = nameWithoutExt
+      .replace(/[^a-zA-Z0-9\-_]/g, '_')  // 영문, 숫자, -, _ 외 모두 _로 변경
+      .replace(/_+/g, '_')  // 연속된 _를 하나로
+      .replace(/^_|_$/g, '')  // 앞뒤 _제거
+
+    // 파일명: timestamp_sanitizedname.ext (sanitizedName이 비어있으면 timestamp만)
+    const finalName = sanitizedName
+      ? `${Date.now()}_${sanitizedName}${ext}`
+      : `${Date.now()}${ext}`
+
+    console.log(`[Multer] 원본: ${file.originalname} → 변환: ${finalName}`)
+    cb(null, finalName)
   }
 })
 
 // 파일 필터: 허용된 확장자만 업로드
 const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  const allowedExtensions = ['.xml', '.musicxml', '.mid', '.midi', '.mp3']
+  const allowedExtensions = ['.xml', '.musicxml', '.mid', '.midi', '.mp3', '.pdf']
   const ext = path.extname(file.originalname).toLowerCase()
 
   if (allowedExtensions.includes(ext)) {
@@ -50,6 +68,8 @@ const upload = multer({
  * 악보 파일 업로드 및 처리
  */
 router.post('/upload-score', upload.single('file'), async (req: Request, res: Response) => {
+  let uploadedFilePath: string | null = null
+
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -59,9 +79,83 @@ router.post('/upload-score', upload.single('file'), async (req: Request, res: Re
     }
 
     const file = req.file
+    uploadedFilePath = file.path
     const ext = path.extname(file.originalname).toLowerCase()
 
-    console.log(`[Music Upload] 파일 수신: ${file.originalname} (${ext})`)
+    console.log(`[Music Upload] 파일 수신: ${file.originalname} (${ext}), 경로: ${file.path}`)
+
+    // PDF 파일인 경우: OMR을 통해 MusicXML로 변환
+    if (ext === '.pdf') {
+      console.log('[Music Upload] PDF 파일 OMR 변환 시작')
+      console.log('[Music Upload] 파일 경로:', file.path)
+      console.log('[Music Upload] 파일 크기:', file.size, 'bytes')
+
+      try {
+        // 파일 경로 정규화 (Windows 경로 처리)
+        const normalizedPath = path.normalize(file.path)
+        console.log('[Music Upload] 정규화된 경로:', normalizedPath)
+
+        const omrResult = await convertPdfToMusicXml(normalizedPath)
+
+        console.log('[Music Upload] OMR 결과:', {
+          success: omrResult.success,
+          hasPath: !!omrResult.musicXmlPath,
+          error: omrResult.error
+        })
+
+        if (!omrResult.success || !omrResult.musicXmlPath) {
+          // 변환 실패 시 업로드된 파일 삭제
+          if (fs.existsSync(file.path)) {
+            try {
+              fs.unlinkSync(file.path)
+              console.log('[Music Upload] 실패한 PDF 파일 삭제 완료')
+            } catch (unlinkError) {
+              console.error('[Music Upload] 파일 삭제 실패:', unlinkError)
+            }
+          }
+
+          return res.status(500).json({
+            success: false,
+            error: `PDF 변환 실패: ${omrResult.error || 'Unknown error'}`
+          })
+        }
+
+        // 변환된 MusicXML 파일명
+        const musicXmlFileName = path.basename(omrResult.musicXmlPath)
+        console.log('[Music Upload] MusicXML 파일명:', musicXmlFileName)
+
+        return res.json({
+          success: true,
+          fileType: 'pdf',
+          fileName: musicXmlFileName,
+          originalName: file.originalname,
+          filePath: `/uploads/${musicXmlFileName}`,
+          message: 'PDF 파일을 MusicXML로 변환했습니다',
+          converted: true,
+          musicXmlContent: omrResult.musicXmlContent,
+          warnings: omrResult.warnings
+        })
+      } catch (omrError) {
+        console.error('[Music Upload] OMR 변환 중 예외 발생:', omrError)
+        console.error('[Music Upload] 에러 스택:', omrError instanceof Error ? omrError.stack : 'No stack')
+
+        // 업로드된 파일 정리
+        if (uploadedFilePath && fs.existsSync(uploadedFilePath)) {
+          try {
+            fs.unlinkSync(uploadedFilePath)
+            console.log('[Music Upload] 예외 발생 시 파일 삭제 완료')
+          } catch (unlinkError) {
+            console.error('[Music Upload] 파일 삭제 실패:', unlinkError)
+          }
+        }
+
+        const errorMessage = omrError instanceof Error ? omrError.message : String(omrError)
+        return res.status(500).json({
+          success: false,
+          error: `PDF 변환 중 오류 발생: ${errorMessage}`
+        })
+      }
+    }
 
     // XML 또는 MIDI 파일인 경우: 바로 성공 응답
     if (['.xml', '.musicxml', '.mid', '.midi'].includes(ext)) {
@@ -115,6 +209,17 @@ router.post('/upload-score', upload.single('file'), async (req: Request, res: Re
 
   } catch (error) {
     console.error('[Music Upload] 오류:', error)
+
+    // 업로드된 파일 정리
+    if (uploadedFilePath && fs.existsSync(uploadedFilePath)) {
+      try {
+        fs.unlinkSync(uploadedFilePath)
+      } catch (unlinkError) {
+        console.error('[Music Upload] 파일 삭제 실패:', unlinkError)
+      }
+    }
+
+    // JSON 응답 보장
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'

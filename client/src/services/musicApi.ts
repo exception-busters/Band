@@ -2,18 +2,19 @@
  * 음악 파일 업로드 및 관리 API 서비스
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 const DEMUCS_API_URL = import.meta.env.VITE_DEMUCS_API_URL || 'http://localhost:8000'
 
 export interface UploadResponse {
   success: boolean
-  fileType?: 'xml' | 'midi'
+  fileType?: 'xml' | 'midi' | 'pdf'
   fileName?: string
   originalName?: string
   filePath?: string
   message?: string
   converted?: boolean
   error?: string
+  musicXmlContent?: string // PDF 변환 시 MusicXML 내용
 }
 
 /**

@@ -29,6 +29,26 @@ app.use('/uploads', express.static('uploads'));
 app.use('/api/music', musicRoutes);
 app.use('/api/payment', paymentRoutes);
 
+// 전역 에러 핸들러 (모든 라우트 이후에 위치)
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+	console.error('[Express] 전역 에러:', err);
+	
+	// JSON 응답 보장
+	if (!res.headersSent) {
+		try {
+			res.status(err.status || 500).json({
+				success: false,
+				error: err.message || 'Internal Server Error',
+				...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+			});
+		} catch (jsonError) {
+			// JSON 응답 실패 시 텍스트로 응답
+			console.error('[Express] JSON 응답 실패:', jsonError);
+			res.status(500).send('Internal Server Error');
+		}
+	}
+});
+
 // 헬스체크
 app.get('/health', (req, res) => {
 	res.json({ status: 'ok', timestamp: new Date().toISOString() });
