@@ -166,6 +166,20 @@ export function MusicRoom() {
     }
   }
 
+  // 진행률 바 클릭으로 seek
+  const handleProgressBarClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!playerRef.current || duration === 0) return
+
+    const progressBar = e.currentTarget
+    const rect = progressBar.getBoundingClientRect()
+    const clickX = e.clientX - rect.left
+    const newProgress = clickX / rect.width
+
+    playerRef.current.seekToProgress(newProgress)
+    setProgress(newProgress)
+    setCurrentTime(newProgress * duration)
+  }
+
   // 스템 토글
   const handleStemToggle = (stemName: string) => {
     if (playerRef.current) {
@@ -367,9 +381,13 @@ export function MusicRoom() {
             </button>
           </div>
 
-          {/* 진행률 바 */}
+          {/* 진행률 바 (클릭하여 이동 가능) */}
           <div className="progress-section">
-            <div className="progress-bar">
+            <div
+              className="progress-bar clickable"
+              onClick={handleProgressBarClick}
+              title="클릭하여 재생 위치 이동"
+            >
               <div className="progress-fill" style={{ width: `${progress * 100}%` }}></div>
             </div>
             <div className="time-display">

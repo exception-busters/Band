@@ -235,12 +235,68 @@ export class MultiTrackPlayer {
   }
 
   /**
+   * 특정 시간으로 이동 (seek)
+   * @param time - 이동할 시간 (초)
+   */
+  seekTo(time: number) {
+    if (!this.audioContext || this.tracks.size === 0) return
+
+    const clampedTime = Math.max(0, Math.min(time, this.duration))
+
+    if (this.isPlaying) {
+      // 재생 중이면 새 위치에서 재시작
+      this.startNewPlayback(clampedTime)
+    } else {
+      // 정지/일시정지 상태면 위치만 업데이트
+      this.pauseTime = clampedTime
+      this.isPaused = true
+
+      // 진행률 콜백 호출 (UI 업데이트)
+      if (this.progressCallback) {
+        this.progressCallback(clampedTime / this.duration, clampedTime)
+      }
+    }
+
+    console.log(`[MultiTrackPlayer] Seeked to ${clampedTime.toFixed(2)}s`)
+  }
+
+  /**
+   * 진행률로 이동 (0~1)
+   * @param progress - 진행률 (0.0 ~ 1.0)
+   */
+  seekToProgress(progress: number) {
+    const clampedProgress = Math.max(0, Math.min(1, progress))
+    const time = clampedProgress * this.duration
+    this.seekTo(time)
+  }
+
+  /**
+   * 현재 재생 시간 가져오기
+   * @returns 현재 시간 (초)
+   */
+  getCurrentTime(): number {
+    if (!this.audioContext) return 0
+
+    if (this.isPlaying) {
+      return this.audioContext.currentTime - this.startTime
+    }
+
+    if (this.isPaused) {
+      return this.pauseTime
+    }
+
+    return 0
+  }
+
+  /**
    * 모든 소스 정지
    */
   private stopAllSources() {
     this.tracks.forEach((track) => {
       if (track.source) {
         try {
+          // onended 콜백 제거 (stop() 호출 시 불필요한 stop 연쇄 방지)
+          track.source.onended = null
           track.source.stop()
         } catch (e) {
           // Already stopped
