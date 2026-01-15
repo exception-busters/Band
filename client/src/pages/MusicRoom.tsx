@@ -34,12 +34,17 @@ export function MusicRoom() {
   const [tempo, setTempo] = useState(1.0)
   const [pitch, setPitch] = useState(0)
 
+  // 드래그 상태
+  const [isDragging, setIsDragging] = useState(false)
+
   // 스템 활성화 상태
   const [stemStates, setStemStates] = useState<Record<string, boolean>>({})
 
   // MultiTrackPlayer 인스턴스
   const playerRef = useRef<MultiTrackPlayer | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const progressBarRef = useRef<HTMLDivElement>(null)
+  const isDraggingRef = useRef(false)  // 드래그 상태 ref (콜백에서 참조용)
 
   // 컴포넌트 마운트 시 플레이어 초기화
   useEffect(() => {
@@ -47,6 +52,8 @@ export function MusicRoom() {
 
     // 진행률 콜백 등록
     playerRef.current.onProgress((p, t) => {
+      // 드래그 중에는 플레이어의 progress 업데이트 무시
+      if (isDraggingRef.current) return
       setProgress(p)
       setCurrentTime(t)
     })
@@ -166,19 +173,56 @@ export function MusicRoom() {
     }
   }
 
-  // 진행률 바 클릭으로 seek
-  const handleProgressBarClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!playerRef.current || duration === 0) return
+  // 진행률 바 마우스 다운 (드래그 시작)
+  const handleProgressBarMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!playerRef.current || !progressBarRef.current || duration === 0) return
+    e.preventDefault()
 
-    const progressBar = e.currentTarget
-    const rect = progressBar.getBoundingClientRect()
-    const clickX = e.clientX - rect.left
-    const newProgress = clickX / rect.width
+    isDraggingRef.current = true
+    setIsDragging(true)
 
-    playerRef.current.seekToProgress(newProgress)
+    const rect = progressBarRef.current.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const newProgress = Math.max(0, Math.min(1, x / rect.width))
     setProgress(newProgress)
     setCurrentTime(newProgress * duration)
   }
+
+  // 드래그 중 마우스 이동 및 마우스 업 처리
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current || !progressBarRef.current) return
+
+      const rect = progressBarRef.current.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const newProgress = Math.max(0, Math.min(1, x / rect.width))
+      setProgress(newProgress)
+      setCurrentTime(newProgress * duration)
+    }
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (!isDraggingRef.current || !progressBarRef.current) return
+
+      const rect = progressBarRef.current.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const newProgress = Math.max(0, Math.min(1, x / rect.width))
+
+      if (playerRef.current) {
+        playerRef.current.seekToProgress(newProgress)
+      }
+
+      isDraggingRef.current = false
+      setIsDragging(false)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [duration])
 
   // 스템 토글
   const handleStemToggle = (stemName: string) => {
@@ -381,12 +425,13 @@ export function MusicRoom() {
             </button>
           </div>
 
-          {/* 진행률 바 (클릭하여 이동 가능) */}
+          {/* 진행률 바 (클릭/드래그로 이동 가능) */}
           <div className="progress-section">
             <div
-              className="progress-bar clickable"
-              onClick={handleProgressBarClick}
-              title="클릭하여 재생 위치 이동"
+              ref={progressBarRef}
+              className={`progress-bar clickable ${isDragging ? 'dragging' : ''}`}
+              onMouseDown={handleProgressBarMouseDown}
+              title="클릭 또는 드래그하여 재생 위치 이동"
             >
               <div className="progress-fill" style={{ width: `${progress * 100}%` }}></div>
             </div>
@@ -412,7 +457,7 @@ export function MusicRoom() {
             />
           </div>
 
-          {/* 음정 조절 (참고: 실제 pitch shift는 미구현) */}
+          {/* 음정 조절 (Tone.js GrainPlayer 사용) */}
           <div className="control-group">
             <label>
               음정: <span>{pitch > 0 ? '+' : ''}{pitch}</span> 반음
@@ -425,10 +470,7 @@ export function MusicRoom() {
               value={pitch}
               onChange={handlePitchChange}
               className="control-slider"
-              disabled
-              title="음정 변경 기능은 현재 지원되지 않습니다"
             />
-            <p className="control-note">* 음정 변경은 향후 업데이트 예정입니다</p>
           </div>
         </div>
       )}

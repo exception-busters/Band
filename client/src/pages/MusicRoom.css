@@ -320,9 +320,14 @@
   transition: height 0.2s ease;
 }
 
-.progress-bar.clickable:hover {
+.progress-bar.clickable:hover,
+.progress-bar.clickable.dragging {
   height: 12px;
   background: rgba(255, 255, 255, 0.15);
+}
+
+.progress-bar.clickable.dragging {
+  cursor: grabbing;
 }
 
 .progress-fill {
@@ -330,6 +335,11 @@
   background: linear-gradient(90deg, #00d4ff, #0099ff);
   border-radius: 4px;
   transition: width 0.1s linear;
+}
+
+/* 드래그 중에는 transition 비활성화 */
+.progress-bar.dragging .progress-fill {
+  transition: none;
 }
 
 .time-display {

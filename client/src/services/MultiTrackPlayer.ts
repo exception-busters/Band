@@ -1,11 +1,12 @@
+import * as Tone from 'tone'
 import { getMusicFileUrl } from './musicApi'
 
 export interface StemTrack {
   name: string
   url: string
-  buffer: AudioBuffer | null
-  gainNode: GainNode | null
-  source: AudioBufferSourceNode | null
+  buffer: Tone.ToneAudioBuffer | null
+  gainNode: Tone.Gain | null
+  source: Tone.GrainPlayer | null
   enabled: boolean
 }
 
@@ -15,43 +16,46 @@ export interface PlayerControls {
 }
 
 /**
- * Web Audio API 기반 다중 트랙 오디오 플레이어
+ * Tone.js 기반 다중 트랙 오디오 플레이어
  * 여러 스템을 동시에 재생하고 각 스템을 개별적으로 제어
+ * GrainPlayer를 사용하여 템포와 음정을 독립적으로 조절
  */
 export class MultiTrackPlayer {
-  private audioContext: AudioContext | null = null
   private tracks: Map<string, StemTrack> = new Map()
-  private startTime: number = 0
-  private pauseTime: number = 0
   private isPlaying: boolean = false
   private isPaused: boolean = false
   private duration: number = 0
 
-  // 오디오 효과 노드
-  private masterGain: GainNode | null = null
+  // 오디오 위치 추적 (템포 변경에 강건한 방식)
+  private audioPosition: number = 0      // 마지막으로 확정된 오디오 위치
+  private lastPositionTime: number = 0   // audioPosition이 확정된 시점
+
+  // 오디오 효과
+  private masterGain: Tone.Gain | null = null
   private playbackRate: number = 1.0
-  private pitchShift: number = 0
+  private pitchShift: number = 0  // 반음 단위
 
   // 진행률 콜백
   private progressCallback?: (progress: number, currentTime: number) => void
   private progressInterval?: number
 
+  // Tone.js 초기화 여부
+  private isInitialized: boolean = false
+
   constructor() {
-    this.initializeAudioContext()
+    this.initializeAudio()
   }
 
   /**
-   * AudioContext 초기화
+   * Tone.js 오디오 초기화
    */
-  private initializeAudioContext() {
-    if (this.audioContext) return
+  private initializeAudio() {
+    if (this.isInitialized) return
 
-    this.audioContext = new AudioContext()
-    this.masterGain = this.audioContext.createGain()
-    this.masterGain.connect(this.audioContext.destination)
-    this.masterGain.gain.value = 1.0
+    this.masterGain = new Tone.Gain(1.0).toDestination()
+    this.isInitialized = true
 
-    console.log('[MultiTrackPlayer] AudioContext initialized')
+    console.log('[MultiTrackPlayer] Tone.js initialized')
   }
 
   /**
@@ -59,14 +63,17 @@ export class MultiTrackPlayer {
    * @param stems - 스템 파일명 맵 { vocals: 'file1.mp3', drums: 'file2.mp3', ... }
    */
   async loadStems(stems: Record<string, string>): Promise<void> {
-    if (!this.audioContext || !this.masterGain) {
-      throw new Error('AudioContext not initialized')
+    if (!this.masterGain) {
+      throw new Error('Audio not initialized')
     }
 
     console.log('[MultiTrackPlayer] Loading stems:', stems)
 
     // 기존 트랙 정리
     this.clearTracks()
+
+    // Tone.js 시작 (브라우저 정책)
+    await Tone.start()
 
     // 모든 스템 로드 (병렬)
     const loadPromises = Object.entries(stems).map(async ([stemName, stemUrl]) => {
@@ -76,36 +83,37 @@ export class MultiTrackPlayer {
         : getMusicFileUrl(stemUrl)
 
       try {
-        let arrayBuffer: ArrayBuffer
+        // Tone.js Buffer로 로드
+        const buffer = new Tone.ToneAudioBuffer()
 
         if (stemUrl.startsWith('data:')) {
-          // base64 data URL을 ArrayBuffer로 변환
+          // base64 data URL을 ArrayBuffer로 변환 후 로드
           const base64Data = stemUrl.split(',')[1]
           const binaryString = atob(base64Data)
           const bytes = new Uint8Array(binaryString.length)
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i)
           }
-          arrayBuffer = bytes.buffer
+          const arrayBuffer = bytes.buffer
+
+          // AudioContext를 사용하여 디코딩
+          const audioContext = Tone.getContext().rawContext
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0))
+          buffer.set(audioBuffer)
         } else {
-          // 일반 URL인 경우 fetch
-          const response = await fetch(url)
-          arrayBuffer = await response.arrayBuffer()
+          // URL에서 직접 로드
+          await buffer.load(url)
         }
 
-        // 오디오 버퍼로 디코딩
-        const audioBuffer = await this.audioContext!.decodeAudioData(arrayBuffer)
-
         // GainNode 생성 (개별 볼륨 제어용)
-        const gainNode = this.audioContext!.createGain()
+        const gainNode = new Tone.Gain(1.0)
         gainNode.connect(this.masterGain!)
-        gainNode.gain.value = 1.0
 
         // 트랙 정보 저장
         const track: StemTrack = {
           name: stemName,
           url,
-          buffer: audioBuffer,
+          buffer,
           gainNode,
           source: null,
           enabled: true  // 기본적으로 모든 스템 활성화
@@ -114,11 +122,11 @@ export class MultiTrackPlayer {
         this.tracks.set(stemName, track)
 
         // 듀레이션 업데이트 (가장 긴 트랙 기준)
-        if (audioBuffer.duration > this.duration) {
-          this.duration = audioBuffer.duration
+        if (buffer.duration > this.duration) {
+          this.duration = buffer.duration
         }
 
-        console.log(`[MultiTrackPlayer] Loaded stem: ${stemName} (${audioBuffer.duration.toFixed(2)}s)`)
+        console.log(`[MultiTrackPlayer] Loaded stem: ${stemName} (${buffer.duration.toFixed(2)}s)`)
       } catch (error) {
         console.error(`[MultiTrackPlayer] Failed to load stem ${stemName}:`, error)
         throw error
@@ -134,14 +142,12 @@ export class MultiTrackPlayer {
    * 재생 시작
    */
   async play() {
-    if (!this.audioContext || this.tracks.size === 0) {
+    if (this.tracks.size === 0) {
       throw new Error('No tracks loaded')
     }
 
-    // AudioContext Resume (브라우저 정책)
-    if (this.audioContext.state === 'suspended') {
-      await this.audioContext.resume()
-    }
+    // Tone.js 시작 (브라우저 정책)
+    await Tone.start()
 
     // 일시정지 상태에서 재개
     if (this.isPaused) {
@@ -158,12 +164,12 @@ export class MultiTrackPlayer {
    * 새로운 재생 시작
    */
   private startNewPlayback(startOffset: number) {
-    if (!this.audioContext) return
-
     // 기존 소스 정리
     this.stopAllSources()
 
-    this.startTime = this.audioContext.currentTime - startOffset
+    // 오디오 위치 추적 초기화
+    this.audioPosition = startOffset
+    this.lastPositionTime = Tone.now()
     this.isPlaying = true
     this.isPaused = false
 
@@ -171,23 +177,36 @@ export class MultiTrackPlayer {
     this.tracks.forEach((track) => {
       if (!track.buffer || !track.gainNode) return
 
-      const source = this.audioContext!.createBufferSource()
-      source.buffer = track.buffer
-      source.playbackRate.value = this.playbackRate
+      // startOffset 위치부터 시작하도록 버퍼 slice
+      // GrainPlayer의 start(when, offset)이 제대로 동작하지 않아서 버퍼를 직접 자름
+      const bufferToUse = startOffset > 0
+        ? track.buffer.slice(startOffset)
+        : track.buffer
+
+      // GrainPlayer 생성 (템포/음정 독립 제어)
+      const source = new Tone.GrainPlayer({
+        url: bufferToUse,
+        grainSize: 0.07,
+        overlap: 0.05,
+        loop: false,
+        reverse: false
+      })
+
+      // 생성 후 playbackRate 명시적 설정 (생성자에서 설정하면 적용 안 될 수 있음)
+      source.playbackRate = this.playbackRate
+
+      // 음정 설정 (반음 → 센트 변환: 1반음 = 100센트)
+      source.detune = this.pitchShift * 100
+
+      // GainNode에 연결
       source.connect(track.gainNode)
 
       // 스템이 비활성화되어 있으면 볼륨 0
       track.gainNode.gain.value = track.enabled ? 1.0 : 0.0
 
-      source.start(0, startOffset)
+      // 재생 시작 (버퍼가 이미 slice되어 있으므로 offset 불필요)
+      source.start(Tone.now())
       track.source = source
-
-      // 재생 완료 시 자동 정지
-      source.onended = () => {
-        if (this.isPlaying) {
-          this.stop()
-        }
-      }
     })
 
     // 진행률 추적 시작
@@ -200,9 +219,9 @@ export class MultiTrackPlayer {
    * 일시정지
    */
   pause() {
-    if (!this.audioContext || !this.isPlaying) return
+    if (!this.isPlaying) return
 
-    this.pauseTime = this.audioContext.currentTime - this.startTime
+    this.audioPosition = this.getCurrentTime()
     this.stopAllSources()
     this.isPlaying = false
     this.isPaused = true
@@ -217,7 +236,7 @@ export class MultiTrackPlayer {
   private resume() {
     if (!this.isPaused) return
 
-    this.startNewPlayback(this.pauseTime)
+    this.startNewPlayback(this.audioPosition)
     console.log('[MultiTrackPlayer] Playback resumed')
   }
 
@@ -228,7 +247,7 @@ export class MultiTrackPlayer {
     this.stopAllSources()
     this.isPlaying = false
     this.isPaused = false
-    this.pauseTime = 0
+    this.audioPosition = 0
     this.stopProgressTracking()
 
     console.log('[MultiTrackPlayer] Playback stopped')
@@ -239,7 +258,7 @@ export class MultiTrackPlayer {
    * @param time - 이동할 시간 (초)
    */
   seekTo(time: number) {
-    if (!this.audioContext || this.tracks.size === 0) return
+    if (this.tracks.size === 0) return
 
     const clampedTime = Math.max(0, Math.min(time, this.duration))
 
@@ -248,7 +267,7 @@ export class MultiTrackPlayer {
       this.startNewPlayback(clampedTime)
     } else {
       // 정지/일시정지 상태면 위치만 업데이트
-      this.pauseTime = clampedTime
+      this.audioPosition = clampedTime
       this.isPaused = true
 
       // 진행률 콜백 호출 (UI 업데이트)
@@ -275,14 +294,14 @@ export class MultiTrackPlayer {
    * @returns 현재 시간 (초)
    */
   getCurrentTime(): number {
-    if (!this.audioContext) return 0
-
     if (this.isPlaying) {
-      return this.audioContext.currentTime - this.startTime
+      // 경과 시간 * 재생속도 + 마지막 확정 위치
+      const elapsed = Tone.now() - this.lastPositionTime
+      return this.audioPosition + elapsed * this.playbackRate
     }
 
     if (this.isPaused) {
-      return this.pauseTime
+      return this.audioPosition
     }
 
     return 0
@@ -295,9 +314,9 @@ export class MultiTrackPlayer {
     this.tracks.forEach((track) => {
       if (track.source) {
         try {
-          // onended 콜백 제거 (stop() 호출 시 불필요한 stop 연쇄 방지)
-          track.source.onended = null
           track.source.stop()
+          track.source.disconnect()
+          track.source.dispose()
         } catch (e) {
           // Already stopped
         }
@@ -332,33 +351,48 @@ export class MultiTrackPlayer {
   }
 
   /**
-   * 템포 변경 (재생 속도)
+   * 템포 변경 (재생 속도) - 음정 변화 없음
    * @param tempo - 배율 (0.5 ~ 2.0)
    */
   setTempo(tempo: number) {
     const clampedTempo = Math.max(0.5, Math.min(2.0, tempo))
-    this.playbackRate = clampedTempo
 
-    // 재생 중이면 즉시 반영 (재시작 필요)
-    if (this.isPlaying && this.audioContext) {
-      const currentTime = this.audioContext.currentTime - this.startTime
-      this.pause()
-      this.startNewPlayback(currentTime)
+    if (this.isPlaying) {
+      // 현재 재생 위치를 새로운 앵커로 저장 (기존 rate 기준)
+      this.audioPosition = this.getCurrentTime()
+      this.lastPositionTime = Tone.now()
+
+      // rate 업데이트
+      this.playbackRate = clampedTempo
+
+      // 재생 중인 모든 소스에 즉시 반영 (재시작 없이)
+      this.tracks.forEach((track) => {
+        if (track.source) {
+          track.source.playbackRate = clampedTempo
+        }
+      })
+    } else {
+      this.playbackRate = clampedTempo
     }
 
-    console.log(`[MultiTrackPlayer] Tempo set to ${clampedTempo}x`)
+    console.log(`[MultiTrackPlayer] Tempo set to ${clampedTempo}x (pitch preserved)`)
   }
 
   /**
-   * 음정 변경 (pitch shift)
+   * 음정 변경 (pitch shift) - 템포 변화 없음
    * @param semitones - 반음 단위 (-12 ~ +12)
-   * 참고: Web Audio API는 기본적으로 pitch shift를 지원하지 않음
-   * playbackRate로 대체 (템포와 음정이 함께 변함)
    */
   setPitch(semitones: number) {
     this.pitchShift = Math.max(-12, Math.min(12, semitones))
-    // 실제 pitch shift는 고급 알고리즘 필요 (예: Web Audio API Extensions)
-    console.warn('[MultiTrackPlayer] True pitch shift not implemented (use tempo instead)')
+
+    // 재생 중인 모든 소스에 즉시 반영
+    this.tracks.forEach((track) => {
+      if (track.source) {
+        track.source.detune = this.pitchShift * 100
+      }
+    })
+
+    console.log(`[MultiTrackPlayer] Pitch set to ${this.pitchShift} semitones (tempo preserved)`)
   }
 
   /**
@@ -375,9 +409,9 @@ export class MultiTrackPlayer {
     this.stopProgressTracking()
 
     this.progressInterval = window.setInterval(() => {
-      if (!this.audioContext || !this.isPlaying) return
+      if (!this.isPlaying) return
 
-      const currentTime = this.audioContext.currentTime - this.startTime
+      const currentTime = this.getCurrentTime()
       const progress = Math.min(currentTime / this.duration, 1)
 
       if (this.progressCallback) {
@@ -429,6 +463,10 @@ export class MultiTrackPlayer {
     this.tracks.forEach((track) => {
       if (track.gainNode) {
         track.gainNode.disconnect()
+        track.gainNode.dispose()
+      }
+      if (track.buffer) {
+        track.buffer.dispose()
       }
     })
     this.tracks.clear()
@@ -444,13 +482,11 @@ export class MultiTrackPlayer {
 
     if (this.masterGain) {
       this.masterGain.disconnect()
+      this.masterGain.dispose()
       this.masterGain = null
     }
 
-    if (this.audioContext) {
-      this.audioContext.close()
-      this.audioContext = null
-    }
+    this.isInitialized = false
 
     console.log('[MultiTrackPlayer] Disposed')
   }
