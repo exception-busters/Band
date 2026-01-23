@@ -21,7 +21,7 @@ function getContext(): AudioContext {
     // Tone.js의 공유 오디오 컨텍스트를 재사용
     // → Tone.start()로 이미 resume 된 컨텍스트이므로 브라우저 자동재생 정책을 피할 수 있음
     const toneContext = Tone.getContext()
-    audioContext = (toneContext.rawContext ?? toneContext.context) as AudioContext
+    audioContext = (toneContext.rawContext ?? (toneContext as unknown as { context: AudioContext }).context) as AudioContext
   }
   return audioContext
 }

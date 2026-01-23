@@ -1,19 +1,5 @@
 import { Midi } from '@tonejs/midi'
 
-interface NoteInfo {
-  pitch: number      // MIDI pitch (0-127)
-  startTime: number  // 시작 시간 (초)
-  duration: number   // 지속 시간 (초)
-  velocity: number   // 세기 (0-127)
-}
-
-interface MeasureInfo {
-  divisions: number
-  tempo: number
-  beats: number
-  beatType: number
-}
-
 /**
  * MusicXML을 MIDI로 변환
  */
@@ -177,6 +163,6 @@ function dynamicToVelocity(dynamic?: string): number {
  */
 export function midiToUrl(midi: Midi): string {
   const midiArray = midi.toArray()
-  const blob = new Blob([midiArray], { type: 'audio/midi' })
+  const blob = new Blob([new Uint8Array(midiArray).buffer], { type: 'audio/midi' })
   return URL.createObjectURL(blob)
 }
