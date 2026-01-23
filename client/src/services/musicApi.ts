@@ -198,18 +198,33 @@ async function separateViaPythonAPI(
 
 /**
  * Node.js 백엔드 경유 (배포용 - HuggingFace/Replicate 프로바이더 사용)
+ * 인증 토큰을 포함하여 Supabase Storage에 저장
  */
 async function separateViaBackend(
   file: File,
   _options?: SeparationOptions
-): Promise<SeparationResponse> {
+): Promise<SeparationResponse & { separationId?: string }> {
   try {
     const formData = new FormData()
     formData.append('file', file)
 
+    // 인증 토큰 가져오기 (Supabase 클라이언트에서)
+    const { supabase } = await import('../lib/supabaseClient')
+    let authToken: string | null = null
+    if (supabase) {
+      const { data: { session } } = await supabase.auth.getSession()
+      authToken = session?.access_token || null
+    }
+
+    const headers: HeadersInit = {}
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`
+    }
+
     const response = await fetch(`${API_BASE_URL}/api/music/separate-stems`, {
       method: 'POST',
-      body: formData
+      body: formData,
+      headers
     })
 
     const data = await response.json()
@@ -218,11 +233,19 @@ async function separateViaBackend(
       throw new Error(data.error || `Separation failed: ${response.status}`)
     }
 
-    // 백엔드는 파일 경로를 반환하므로 URL로 변환
-    const stems: SeparatedStems = {}
+    // 서버가 URL을 직접 반환하는 경우 (Supabase Storage 사용)
+    let stems: SeparatedStems = {}
     if (data.stems) {
-      for (const [key, fileName] of Object.entries(data.stems)) {
-        stems[key as keyof SeparatedStems] = `${API_BASE_URL}/uploads/${fileName}`
+      // URL인지 파일명인지 확인
+      const firstValue = Object.values(data.stems)[0] as string
+      if (firstValue && (firstValue.startsWith('http') || firstValue.startsWith('data:'))) {
+        // 이미 URL인 경우
+        stems = data.stems
+      } else {
+        // 파일명인 경우 URL로 변환
+        for (const [key, fileName] of Object.entries(data.stems)) {
+          stems[key as keyof SeparatedStems] = `${API_BASE_URL}/uploads/${fileName}`
+        }
       }
     }
 
@@ -231,7 +254,8 @@ async function separateViaBackend(
       stems,
       availableStems: data.availableStems,
       originalFile: data.originalFile,
-      message: data.message
+      message: data.message,
+      separationId: data.separationId  // 새로 추가: 저장된 분리 ID
     }
   } catch (error) {
     console.error('Separation error (Backend):', error)
@@ -239,5 +263,156 @@ async function separateViaBackend(
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
     }
+  }
+}
+
+// ========================================
+// 음원 분리 히스토리 관련 API
+// ========================================
+
+/**
+ * 저장된 음원 분리 결과 타입
+ */
+export interface StemSeparation {
+  id: string
+  user_id: string | null
+  original_filename: string
+  original_file_size: number | null
+  vocals_url: string | null
+  drums_url: string | null
+  bass_url: string | null
+  piano_url: string | null
+  guitar_url: string | null
+  other_url: string | null
+  storage_folder: string
+  status: 'processing' | 'completed' | 'failed' | 'expired'
+  created_at: string
+  expires_at: string
+}
+
+/**
+ * 저장된 분리 결과에서 스템 객체 추출
+ */
+export function getStemsFromSeparation(separation: StemSeparation): SeparatedStems {
+  return {
+    vocals: separation.vocals_url || undefined,
+    drums: separation.drums_url || undefined,
+    bass: separation.bass_url || undefined,
+    piano: separation.piano_url || undefined,
+    guitar: separation.guitar_url || undefined,
+    other: separation.other_url || undefined,
+  }
+}
+
+/**
+ * 저장된 분리 결과에서 사용 가능한 스템 목록 추출
+ */
+export function getAvailableStemsFromSeparation(separation: StemSeparation): string[] {
+  const stems = getStemsFromSeparation(separation)
+  return Object.entries(stems)
+    .filter(([, url]) => url !== undefined)
+    .map(([name]) => name)
+}
+
+/**
+ * 사용자의 음원 분리 히스토리 조회
+ */
+export async function getStemHistory(): Promise<StemSeparation[]> {
+  try {
+    // 인증 토큰 가져오기
+    const { supabase } = await import('../lib/supabaseClient')
+    let authToken: string | null = null
+    if (supabase) {
+      const { data: { session } } = await supabase.auth.getSession()
+      authToken = session?.access_token || null
+    }
+
+    const headers: HeadersInit = {}
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/music/stem-history`, {
+      headers
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to fetch history')
+    }
+
+    return data.separations || []
+  } catch (error) {
+    console.error('Failed to fetch stem history:', error)
+    return []
+  }
+}
+
+/**
+ * 특정 분리 결과 조회
+ */
+export async function getStemSeparation(separationId: string): Promise<StemSeparation | null> {
+  try {
+    const { supabase } = await import('../lib/supabaseClient')
+    let authToken: string | null = null
+    if (supabase) {
+      const { data: { session } } = await supabase.auth.getSession()
+      authToken = session?.access_token || null
+    }
+
+    const headers: HeadersInit = {}
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/music/stem-separation/${separationId}`, {
+      headers
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to fetch separation')
+    }
+
+    return data.separation
+  } catch (error) {
+    console.error('Failed to fetch stem separation:', error)
+    return null
+  }
+}
+
+/**
+ * 분리 결과 삭제
+ */
+export async function deleteStemSeparation(separationId: string): Promise<boolean> {
+  try {
+    const { supabase } = await import('../lib/supabaseClient')
+    let authToken: string | null = null
+    if (supabase) {
+      const { data: { session } } = await supabase.auth.getSession()
+      authToken = session?.access_token || null
+    }
+
+    const headers: HeadersInit = {}
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/music/stem-separation/${separationId}`, {
+      method: 'DELETE',
+      headers
+    })
+
+    if (!response.ok) {
+      const data = await response.json()
+      throw new Error(data.error || 'Failed to delete separation')
+    }
+
+    return true
+  } catch (error) {
+    console.error('Failed to delete stem separation:', error)
+    return false
   }
 }

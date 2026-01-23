@@ -1,5 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
-import { separateAudioStems, getMusicFileUrl, type SeparatedStems } from '../services/musicApi'
+import {
+  separateAudioStems,
+  getMusicFileUrl,
+  getStemHistory,
+  getStemsFromSeparation,
+  getAvailableStemsFromSeparation,
+  deleteStemSeparation,
+  type SeparatedStems,
+  type StemSeparation
+} from '../services/musicApi'
 import { MultiTrackPlayer } from '../services/MultiTrackPlayer'
 import './MusicRoom.css'
 
@@ -39,6 +48,13 @@ export function MusicRoom() {
 
   // 스템 활성화 상태
   const [stemStates, setStemStates] = useState<Record<string, boolean>>({})
+
+  // 히스토리 상태
+  const [showHistory, setShowHistory] = useState(false)
+  const [separationHistory, setSeparationHistory] = useState<StemSeparation[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [currentSeparationId, setCurrentSeparationId] = useState<string | null>(null)
+  const [loadingStemsFromHistory, setLoadingStemsFromHistory] = useState(false)
 
   // MultiTrackPlayer 인스턴스
   const playerRef = useRef<MultiTrackPlayer | null>(null)
@@ -319,6 +335,132 @@ export function MusicRoom() {
     })
   }
 
+  // 히스토리 로드
+  const loadHistory = async () => {
+    setLoadingHistory(true)
+    try {
+      const history = await getStemHistory()
+      setSeparationHistory(history)
+    } catch (error) {
+      console.error('Failed to load history:', error)
+    } finally {
+      setLoadingHistory(false)
+    }
+  }
+
+  // 히스토리 토글
+  const handleToggleHistory = () => {
+    const newShowHistory = !showHistory
+    setShowHistory(newShowHistory)
+    if (newShowHistory && separationHistory.length === 0) {
+      loadHistory()
+    }
+  }
+
+  // 히스토리에서 불러오기
+  const handleLoadFromHistory = async (separation: StemSeparation) => {
+    try {
+      // 로딩 시작
+      setLoadingStemsFromHistory(true)
+      setShowHistory(false)
+
+      // 기존 플레이어 완전히 정지 및 초기화
+      if (playerRef.current) {
+        playerRef.current.stop()
+        // 기존 트랙 정리를 위해 dispose 후 재생성
+        playerRef.current.dispose()
+        playerRef.current = new MultiTrackPlayer()
+        // 진행률 콜백 재등록
+        playerRef.current.onProgress((p, t) => {
+          if (isDraggingRef.current) return
+          setProgress(p)
+          setCurrentTime(t)
+        })
+      }
+
+      // UI 상태 초기화
+      setSeparatedStems({})
+      setAvailableStems([])
+      setStemStates({})
+      setProgress(0)
+      setCurrentTime(0)
+      setDuration(0)
+      setIsPlaying(false)
+      setIsPaused(false)
+
+      const stems = getStemsFromSeparation(separation)
+      const availStems = getAvailableStemsFromSeparation(separation)
+
+      // 플레이어에 스템 로드 (undefined 값 필터링)
+      if (playerRef.current) {
+        const validStems: Record<string, string> = {}
+        for (const [key, value] of Object.entries(stems)) {
+          if (value) {
+            validStems[key] = value
+          }
+        }
+
+        setUploadStatus(`"${separation.original_filename}" 로딩 중...`)
+        await playerRef.current.loadStems(validStems)
+        const state = playerRef.current.getState()
+        setDuration(state.duration)
+      }
+
+      // 로드 완료 후 UI 상태 업데이트
+      setSeparatedStems(stems)
+      setAvailableStems(availStems)
+      setCurrentSeparationId(separation.id)
+
+      // 초기 스템 상태 설정 (모두 활성화)
+      const initialStates: Record<string, boolean> = {}
+      availStems.forEach(stem => {
+        initialStates[stem] = true
+      })
+      setStemStates(initialStates)
+
+      setUploadStatus(`"${separation.original_filename}" 불러오기 완료`)
+    } catch (error) {
+      console.error('Failed to load from history:', error)
+      alert('불러오기 실패')
+      setUploadStatus('')
+    } finally {
+      setLoadingStemsFromHistory(false)
+    }
+  }
+
+  // 히스토리에서 삭제
+  const handleDeleteFromHistory = async (separationId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+
+    if (!confirm('이 분리 결과를 삭제하시겠습니까?')) return
+
+    try {
+      const success = await deleteStemSeparation(separationId)
+      if (success) {
+        setSeparationHistory(prev => prev.filter(s => s.id !== separationId))
+        // 현재 불러온 것이 삭제된 경우 초기화
+        if (currentSeparationId === separationId) {
+          setCurrentSeparationId(null)
+        }
+      } else {
+        alert('삭제 실패')
+      }
+    } catch (error) {
+      console.error('Failed to delete:', error)
+      alert('삭제 실패')
+    }
+  }
+
+  // 날짜 포맷
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
+  }
+
   return (
     <div className="music-room-container">
       {/* 파일 업로드 섹션 */}
@@ -332,7 +474,7 @@ export function MusicRoom() {
             onChange={handleFileChange}
             className="file-input-hidden"
             id="music-file-input"
-            disabled={isSeparating}
+            disabled={isSeparating || loadingStemsFromHistory}
           />
           <label htmlFor="music-file-input" className="file-select-btn">
             {selectedFile ? selectedFile.name : '파일 선택'}
@@ -341,16 +483,82 @@ export function MusicRoom() {
           <button
             className="upload-btn"
             onClick={handleUploadAndSeparate}
-            disabled={!selectedFile || isSeparating}
+            disabled={!selectedFile || isSeparating || loadingStemsFromHistory}
           >
             {isSeparating ? '분리 중...' : '업로드 및 분리'}
           </button>
         </div>
 
         {uploadStatus && (
-          <div className={`upload-status ${isSeparating ? 'processing' : 'success'}`}>
-            {isSeparating && <div className="spinner"></div>}
+          <div className={`upload-status ${(isSeparating || loadingStemsFromHistory) ? 'processing' : 'success'}`}>
+            {(isSeparating || loadingStemsFromHistory) && <div className="spinner"></div>}
             <p>{uploadStatus}</p>
+          </div>
+        )}
+      </div>
+
+      {/* 히스토리 섹션 */}
+      <div className="history-section">
+        <button
+          className="history-toggle-btn"
+          onClick={handleToggleHistory}
+          disabled={loadingStemsFromHistory}
+        >
+          {loadingStemsFromHistory ? '로딩 중...' : showHistory ? '히스토리 닫기' : '이전 분리 결과 보기'}
+        </button>
+
+        {showHistory && (
+          <div className="history-panel">
+            <div className="history-header">
+              <h3>분리 히스토리</h3>
+              <button className="history-refresh-btn" onClick={loadHistory} disabled={loadingHistory}>
+                새로고침
+              </button>
+            </div>
+
+            {loadingHistory ? (
+              <div className="history-loading">
+                <div className="spinner"></div>
+                <p>로딩 중...</p>
+              </div>
+            ) : separationHistory.length === 0 ? (
+              <p className="history-empty">저장된 분리 결과가 없습니다.</p>
+            ) : (
+              <ul className="history-list">
+                {separationHistory.map(sep => (
+                  <li
+                    key={sep.id}
+                    className={`history-item ${currentSeparationId === sep.id ? 'current' : ''}`}
+                    onClick={() => handleLoadFromHistory(sep)}
+                  >
+                    <div className="history-item-info">
+                      <span className="history-filename">{sep.original_filename}</span>
+                      <span className="history-date">{formatDate(sep.created_at)}</span>
+                      <span className="history-expires">
+                        만료: {formatDate(sep.expires_at)}
+                      </span>
+                    </div>
+                    <div className="history-item-actions">
+                      <button
+                        className="history-load-btn"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleLoadFromHistory(sep)
+                        }}
+                      >
+                        불러오기
+                      </button>
+                      <button
+                        className="history-delete-btn"
+                        onClick={(e) => handleDeleteFromHistory(sep.id, e)}
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
       </div>

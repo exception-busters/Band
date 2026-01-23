@@ -2,10 +2,93 @@ import express, { Request, Response } from 'express'
 import multer from 'multer'
 import * as path from 'path'
 import * as fs from 'fs'
+import { v4 as uuidv4 } from 'uuid'
+import { createClient } from '@supabase/supabase-js'
 import { convertMp3ToMidi } from '../services/amtService'
 import { separateAudioWithProvider, currentProvider } from '../services/demucsProvider'
 
 const router = express.Router()
+
+// Supabase 서비스 클라이언트 (Storage 및 DB 접근용)
+const supabaseUrl = process.env.SUPABASE_URL || ''
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || ''
+const supabaseAdmin = supabaseUrl && supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey)
+  : null
+
+if (supabaseAdmin) {
+  console.log('[Music Routes] Supabase admin client initialized')
+} else {
+  console.log('[Music Routes] Supabase not configured - stem storage disabled')
+}
+
+// JWT에서 사용자 ID 추출
+async function getUserIdFromToken(authHeader: string | string[] | undefined): Promise<string | null> {
+  // 배열인 경우 첫 번째 값 사용
+  const header = Array.isArray(authHeader) ? authHeader[0] : authHeader
+
+  if (!header?.startsWith('Bearer ') || !supabaseAdmin) {
+    return null
+  }
+
+  try {
+    const token = header.substring(7)
+    const { data: { user } } = await supabaseAdmin.auth.getUser(token)
+    return user?.id || null
+  } catch (error) {
+    console.error('[Auth] Token verification failed:', error)
+    return null
+  }
+}
+
+// 스템 파일을 Supabase Storage에 업로드
+async function uploadStemsToStorage(
+  stems: Record<string, string>,
+  userId: string | null,
+  separationId: string
+): Promise<Record<string, string>> {
+  if (!supabaseAdmin) {
+    throw new Error('Supabase not configured')
+  }
+
+  const folder = `${userId || 'anonymous'}/${separationId}`
+  const urls: Record<string, string> = {}
+
+  for (const [stemName, localPath] of Object.entries(stems)) {
+    if (!localPath || !fs.existsSync(localPath)) continue
+
+    try {
+      const fileBuffer = fs.readFileSync(localPath)
+      const storagePath = `${folder}/${stemName}.wav`
+
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from('audio-stems')
+        .upload(storagePath, fileBuffer, {
+          contentType: 'audio/wav',
+          upsert: true
+        })
+
+      if (uploadError) {
+        console.error(`[Storage] Upload failed for ${stemName}:`, uploadError)
+        continue
+      }
+
+      const { data } = supabaseAdmin.storage
+        .from('audio-stems')
+        .getPublicUrl(storagePath)
+
+      urls[stemName] = data.publicUrl
+
+      // 로컬 파일 삭제
+      fs.unlinkSync(localPath)
+      console.log(`[Storage] Uploaded ${stemName} to ${storagePath}`)
+    } catch (error) {
+      console.error(`[Storage] Error uploading ${stemName}:`, error)
+    }
+  }
+
+  return urls
+}
 
 // Multer 설정: 파일 저장 위치 및 파일명 설정
 const storage = multer.diskStorage({
@@ -128,7 +211,7 @@ router.post('/upload-score', upload.single('file'), async (req: Request, res: Re
  */
 router.get('/file/:filename', (req: Request, res: Response) => {
   try {
-    const filename = req.params.filename
+    const filename = req.params.filename as string
     const filePath = path.join(__dirname, '../../uploads', filename)
 
     // 파일 존재 여부 확인
@@ -156,7 +239,7 @@ router.get('/file/:filename', (req: Request, res: Response) => {
  */
 router.delete('/file/:filename', (req: Request, res: Response) => {
   try {
-    const filename = req.params.filename
+    const filename = req.params.filename as string
     const filePath = path.join(__dirname, '../../uploads', filename)
 
     // 파일 존재 여부 확인
@@ -186,6 +269,7 @@ router.delete('/file/:filename', (req: Request, res: Response) => {
 /**
  * POST /api/music/separate-stems
  * MP3 파일을 세션별로 분리 (vocals, drums, bass, other 등)
+ * Supabase Storage에 저장하고 DB에 기록
  */
 router.post('/separate-stems', upload.single('file'), async (req: Request, res: Response) => {
   try {
@@ -201,7 +285,6 @@ router.post('/separate-stems', upload.single('file'), async (req: Request, res: 
 
     // MP3 파일만 허용
     if (ext !== '.mp3') {
-      // 업로드된 파일 삭제
       fs.unlinkSync(file.path)
       return res.status(400).json({
         success: false,
@@ -210,6 +293,10 @@ router.post('/separate-stems', upload.single('file'), async (req: Request, res: 
     }
 
     console.log(`[Music Separate] 음원 분리 요청: ${file.originalname} (Provider: ${currentProvider})`)
+
+    // 사용자 ID 추출 (로그인한 경우)
+    const userId = await getUserIdFromToken(req.headers.authorization)
+    const separationId = uuidv4()
 
     // DEMUCS Provider를 통해 음원 분리
     const separationResult = await separateAudioWithProvider(file.path)
@@ -221,7 +308,60 @@ router.post('/separate-stems', upload.single('file'), async (req: Request, res: 
       })
     }
 
-    // 각 스템의 파일명 추출 (클라이언트에서 접근할 수 있도록)
+    // Supabase가 설정되어 있으면 Storage에 업로드하고 DB에 저장
+    if (supabaseAdmin) {
+      try {
+        // Storage에 업로드
+        const stemUrls = await uploadStemsToStorage(
+          separationResult.stems as Record<string, string>,
+          userId,
+          separationId
+        )
+
+        // DB에 기록 저장
+        const { error: dbError } = await supabaseAdmin
+          .from('stem_separations')
+          .insert({
+            id: separationId,
+            user_id: userId,
+            original_filename: file.originalname,
+            original_file_size: file.size,
+            storage_folder: `${userId || 'anonymous'}/${separationId}`,
+            vocals_url: stemUrls.vocals || null,
+            drums_url: stemUrls.drums || null,
+            bass_url: stemUrls.bass || null,
+            piano_url: stemUrls.piano || null,
+            guitar_url: stemUrls.guitar || null,
+            other_url: stemUrls.other || null,
+            status: 'completed'
+          })
+
+        if (dbError) {
+          console.error('[DB] Failed to save separation record:', dbError)
+        } else {
+          console.log(`[DB] Separation record saved: ${separationId}`)
+        }
+
+        // 원본 MP3 파일도 삭제
+        if (fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path)
+        }
+
+        return res.json({
+          success: true,
+          separationId,
+          stems: stemUrls,
+          availableStems: Object.keys(stemUrls),
+          originalFile: file.originalname,
+          message: '음원 분리가 완료되었습니다.'
+        })
+      } catch (storageError) {
+        console.error('[Storage] Error during upload:', storageError)
+        // Storage 실패 시 로컬 파일명으로 fallback
+      }
+    }
+
+    // Supabase 없거나 실패 시: 기존 방식 (로컬 파일명 반환)
     const stemsFileNames: Record<string, string> = {}
     for (const [stemName, stemPath] of Object.entries(separationResult.stems)) {
       if (stemPath) {
@@ -239,6 +379,255 @@ router.post('/separate-stems', upload.single('file'), async (req: Request, res: 
 
   } catch (error) {
     console.error('[Music Separate] 오류:', error)
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+})
+
+/**
+ * GET /api/music/stem-history
+ * 사용자의 음원 분리 히스토리 조회
+ */
+router.get('/stem-history', async (req: Request, res: Response) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({
+        success: false,
+        error: 'Supabase not configured'
+      })
+    }
+
+    const userId = await getUserIdFromToken(req.headers.authorization)
+
+    // user_id가 일치하거나 NULL인 것 (테스트용 익명 분리) 모두 조회
+    let query = supabaseAdmin
+      .from('stem_separations')
+      .select('*')
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (userId) {
+      query = query.eq('user_id', userId)
+    } else {
+      query = query.is('user_id', null)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('[DB] Failed to fetch history:', error)
+      return res.status(500).json({
+        success: false,
+        error: error.message
+      })
+    }
+
+    return res.json({
+      success: true,
+      separations: data || []
+    })
+  } catch (error) {
+    console.error('[Stem History] 오류:', error)
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+})
+
+/**
+ * GET /api/music/stem-separation/:id
+ * 특정 분리 결과 조회
+ */
+router.get('/stem-separation/:id', async (req: Request, res: Response) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({
+        success: false,
+        error: 'Supabase not configured'
+      })
+    }
+
+    const { id } = req.params
+    const userId = await getUserIdFromToken(req.headers.authorization)
+
+    const { data, error } = await supabaseAdmin
+      .from('stem_separations')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (error || !data) {
+      return res.status(404).json({
+        success: false,
+        error: '분리 결과를 찾을 수 없습니다.'
+      })
+    }
+
+    // 소유자 확인 (본인 것 또는 익명 분리)
+    if (data.user_id && data.user_id !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: '접근 권한이 없습니다.'
+      })
+    }
+
+    return res.json({
+      success: true,
+      separation: data
+    })
+  } catch (error) {
+    console.error('[Stem Get] 오류:', error)
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+})
+
+/**
+ * DELETE /api/music/stem-separation/:id
+ * 분리 결과 삭제 (Storage 파일 + DB 레코드)
+ */
+router.delete('/stem-separation/:id', async (req: Request, res: Response) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({
+        success: false,
+        error: 'Supabase not configured'
+      })
+    }
+
+    const { id } = req.params
+    const userId = await getUserIdFromToken(req.headers.authorization)
+
+    // 분리 결과 조회
+    const { data: separation, error: fetchError } = await supabaseAdmin
+      .from('stem_separations')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !separation) {
+      return res.status(404).json({
+        success: false,
+        error: '분리 결과를 찾을 수 없습니다.'
+      })
+    }
+
+    // 소유자 확인
+    if (separation.user_id && separation.user_id !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: '삭제 권한이 없습니다.'
+      })
+    }
+
+    // Storage에서 파일 삭제
+    const folder = separation.storage_folder
+    const stemNames = ['vocals', 'drums', 'bass', 'piano', 'guitar', 'other']
+    const filesToDelete = stemNames.map(name => `${folder}/${name}.wav`)
+
+    const { error: storageError } = await supabaseAdmin.storage
+      .from('audio-stems')
+      .remove(filesToDelete)
+
+    if (storageError) {
+      console.error('[Storage] Failed to delete files:', storageError)
+    }
+
+    // DB에서 레코드 삭제
+    const { error: deleteError } = await supabaseAdmin
+      .from('stem_separations')
+      .delete()
+      .eq('id', id)
+
+    if (deleteError) {
+      return res.status(500).json({
+        success: false,
+        error: deleteError.message
+      })
+    }
+
+    console.log(`[Delete] Separation deleted: ${id}`)
+
+    return res.json({
+      success: true,
+      message: '분리 결과가 삭제되었습니다.'
+    })
+  } catch (error) {
+    console.error('[Stem Delete] 오류:', error)
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+})
+
+/**
+ * POST /api/music/cleanup-expired
+ * 만료된 분리 결과 정리 (크론 또는 수동 호출용)
+ */
+router.post('/cleanup-expired', async (req: Request, res: Response) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({
+        success: false,
+        error: 'Supabase not configured'
+      })
+    }
+
+    // 관리자 토큰 확인 (환경 변수로 설정)
+    const adminToken = req.headers['x-admin-token']
+    if (adminToken !== process.env.ADMIN_CLEANUP_TOKEN) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized'
+      })
+    }
+
+    // 만료된 분리 결과 조회
+    const { data: expired, error: fetchError } = await supabaseAdmin
+      .from('stem_separations')
+      .select('id, storage_folder')
+      .lt('expires_at', new Date().toISOString())
+      .eq('status', 'completed')
+      .limit(100)
+
+    if (fetchError || !expired || expired.length === 0) {
+      return res.json({
+        success: true,
+        deleted: 0,
+        message: '만료된 항목이 없습니다.'
+      })
+    }
+
+    // Storage 파일 삭제
+    const stemNames = ['vocals', 'drums', 'bass', 'piano', 'guitar', 'other']
+    for (const sep of expired) {
+      const filesToDelete = stemNames.map(name => `${sep.storage_folder}/${name}.wav`)
+      await supabaseAdmin.storage.from('audio-stems').remove(filesToDelete)
+    }
+
+    // DB 레코드 삭제
+    const ids = expired.map(e => e.id)
+    await supabaseAdmin
+      .from('stem_separations')
+      .delete()
+      .in('id', ids)
+
+    console.log(`[Cleanup] Deleted ${expired.length} expired separations`)
+
+    return res.json({
+      success: true,
+      deleted: expired.length,
+      message: `${expired.length}개의 만료된 항목이 삭제되었습니다.`
+    })
+  } catch (error) {
+    console.error('[Cleanup] 오류:', error)
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
