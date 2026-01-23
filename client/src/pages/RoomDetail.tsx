@@ -427,13 +427,16 @@ export function RoomDetail() {
 
     if (room?.free_join || isHost) {
       // 자유참여 또는 방장: 바로 연주 시작
-      setMyInstrument(instrumentId, isHost || false)
       setIsPerformer(true)
 
       try {
+        // 중요: 먼저 마이크 스트림을 준비한 후에 start-performing 전송
+        // 순서가 바뀌면 다른 피어가 offer를 보내왔을 때 스트림이 없어서 연결 실패
         await startLocalMic()
+        setMyInstrument(instrumentId, isHost || false)
       } catch (error) {
         console.error('Failed to start mic:', error)
+        setIsPerformer(false) // 실패 시 롤백
       }
     } else {
       // 승인 필요: 방장에게 요청 전송
@@ -444,13 +447,15 @@ export function RoomDetail() {
   // 승인되면 연주 시작
   const handleStartAfterApproval = async () => {
     if (myRequestInstrument) {
-      setMyInstrument(myRequestInstrument, false)
       setIsPerformer(true)
 
       try {
+        // 중요: 먼저 마이크 스트림을 준비한 후에 start-performing 전송
         await startLocalMic()
+        setMyInstrument(myRequestInstrument, false)
       } catch (error) {
         console.error('Failed to start mic:', error)
+        setIsPerformer(false) // 실패 시 롤백
       }
     }
   }
@@ -1309,6 +1314,16 @@ export function RoomDetail() {
                       </span>
                       <span className="quality-indicator">{qualityInfo.icon}</span>
                     </div>
+                    {/* 음소거 버튼 */}
+                    {hasAudioStream && (
+                      <button
+                        className={`performer-mute-btn ${(mixSettingsMap[oderId]?.muted) ? 'muted' : ''}`}
+                        onClick={() => setMixMuted(oderId, !(mixSettingsMap[oderId]?.muted))}
+                        title={(mixSettingsMap[oderId]?.muted) ? '음소거 해제' : '음소거'}
+                      >
+                        {(mixSettingsMap[oderId]?.muted) ? '🔇' : '🔊'}
+                      </button>
+                    )}
                     {/* 오디오 재생 */}
                     {hasAudioStream && (
                       <RemoteAudio
@@ -1329,6 +1344,14 @@ export function RoomDetail() {
               </div>
             )}
           </div>
+
+          {/* 방장: 승인 요청 알림 (참여 버튼 위에 표시) */}
+          {isHost && pendingRequests.length > 0 && (
+            <div className="pending-requests-alert" onClick={() => setShowPendingRequests(true)}>
+              <span className="alert-badge">{pendingRequests.length}</span>
+              <span>연주 참여 요청</span>
+            </div>
+          )}
 
           {/* 참여/관람 전환 버튼 */}
           <div className="participation-toggle">
@@ -1374,14 +1397,6 @@ export function RoomDetail() {
               <p className="approval-notice">이 방은 방장 승인이 필요합니다</p>
             )}
           </div>
-
-          {/* 방장: 승인 요청 알림 */}
-          {isHost && pendingRequests.length > 0 && (
-            <div className="pending-requests-alert" onClick={() => setShowPendingRequests(true)}>
-              <span className="alert-badge">{pendingRequests.length}</span>
-              <span>연주 참여 요청</span>
-            </div>
-          )}
         </aside>
 
         {/* 가운데: 믹서 */}

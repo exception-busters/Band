@@ -484,6 +484,10 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     // 오디오 노드가 있을 때만 측정 시작
     if (audioNodesRef.current.size > 0) {
       measureLevels()
+    } else {
+      // 오디오 노드가 없으면 레벨 초기화
+      setAudioLevels({})
+      setMasterLevel(0)
     }
 
     return () => {
@@ -688,21 +692,30 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   // pending ICE candidates 적용
   const applyPendingCandidates = async (peerId: string, pc: RTCPeerConnection) => {
     const pending = pendingIceCandidates.current.get(peerId)
-    if (pending && pending.length > 0) {
-      console.log('[RTC] Applying', pending.length, 'pending ICE candidates for:', peerId.slice(0, 8))
-      for (const candidate of pending) {
-        try {
-          // null이나 빈 candidate는 건너뛰기
-          if (candidate && candidate.candidate) {
-            await pc.addIceCandidate(new RTCIceCandidate(candidate))
-          }
-        } catch (err) {
-          // ICE candidate 에러는 무시 (이미 연결된 경우 발생할 수 있음)
-          console.warn('[RTC] Failed to add pending ICE candidate (may be stale):', err)
-        }
-      }
+    if (!pending || pending.length === 0) return
+
+    // 연결이 이미 완료/실패/종료된 경우 pending candidates 정리만
+    const iceState = pc.iceConnectionState
+    if (iceState === 'connected' || iceState === 'completed' ||
+        iceState === 'failed' || iceState === 'closed') {
+      console.log('[RTC] Skipping pending candidates - ICE already in state:', iceState, 'for:', peerId.slice(0, 8))
       pendingIceCandidates.current.delete(peerId)
+      return
     }
+
+    console.log('[RTC] Applying', pending.length, 'pending ICE candidates for:', peerId.slice(0, 8), 'iceState:', iceState)
+    for (const candidate of pending) {
+      try {
+        // null이나 빈 candidate는 건너뛰기
+        if (candidate && candidate.candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate))
+        }
+      } catch (err) {
+        // ICE candidate 에러는 무시 (이미 연결된 경우 발생할 수 있음)
+        console.warn('[RTC] Failed to add pending ICE candidate (may be stale):', err)
+      }
+    }
+    pendingIceCandidates.current.delete(peerId)
   }
 
   const handleRemoteOffer = async (peerId: string, offer: RTCSessionDescriptionInit) => {
@@ -1759,11 +1772,15 @@ export function RoomProvider({ children }: { children: ReactNode }) {
               }
             }))
 
-            // 새 연주자가 나타났으므로 WebRTC 연결 시작 (관람자도 연주자 소리를 들어야 함)
-            // 아직 연결이 없으면 offer 전송
-            if (!peerConnections.current.has(oderId)) {
-              console.log('[RTC] New performer detected, creating offer for:', oderId.slice(0, 8))
+            // 새 연주자가 나타났을 때:
+            // - 내가 연주자면: offer 전송하여 양방향 연결
+            // - 내가 관람자면: 새 연주자가 startLocalMic에서 나에게 offer를 보내줌 (대기)
+            // 관람자가 트랙 없는 offer를 보내면 연결은 되지만 오디오가 안 흐름!
+            if (!peerConnections.current.has(oderId) && localStreamRef.current) {
+              console.log('[RTC] New performer detected, I have stream, creating offer for:', oderId.slice(0, 8))
               void createOfferForPeer(oderId)
+            } else if (!localStreamRef.current) {
+              console.log('[RTC] New performer detected, but I am a viewer - waiting for their offer:', oderId.slice(0, 8))
             }
           } else {
             // 연주 중단 - 악기 정보 제거
