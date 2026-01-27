@@ -45,7 +45,6 @@ export function Home() {
       <header className="hero">
         <p className="eyebrow">SYNCROOM INSPIRED · WEB DEMO</p>
         <h1>
-          Yamaha Syncroom을 재해석한
           <br />
           초저지연 온라인 합주실
         </h1>
