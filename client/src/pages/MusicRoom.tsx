@@ -49,6 +49,10 @@ export function MusicRoom() {
   // 스템 활성화 상태
   const [stemStates, setStemStates] = useState<Record<string, boolean>>({})
 
+  // 볼륨 상태
+  const [masterVolume, setMasterVolume] = useState(100)
+  const [stemVolumes, setStemVolumes] = useState<Record<string, number>>({})
+
   // 히스토리 상태
   const [showHistory, setShowHistory] = useState(false)
   const [separationHistory, setSeparationHistory] = useState<StemSeparation[]>([])
@@ -97,6 +101,32 @@ export function MusicRoom() {
     if (!selectedFile) {
       alert('MP3 파일을 선택해주세요.')
       return
+    }
+
+    // 만료되지 않은 같은 이름의 기록이 있으면 확인 요청
+    const tryDecodeFilename = (name: string): string => {
+      if (/[가-힣ᄀ-ᇿ㄰-㆏]/.test(name)) return name
+      try {
+        const bytes = new Uint8Array([...name].map(c => c.charCodeAt(0) & 0xFF))
+        const decoded = new TextDecoder('utf-8').decode(bytes)
+        if (/[가-힣ᄀ-ᇿ㄰-㆏]/.test(decoded)) return decoded
+      } catch {}
+      return name
+    }
+    const history = await getStemHistory()
+    const now = new Date()
+    const uploadBaseName = selectedFile.name.replace(/ \(\d+\)(\.[^.]+)$/, '$1')
+    const hasDuplicate = history.some(h => {
+      if (new Date(h.expires_at) <= now) return false
+      const decoded = tryDecodeFilename(h.original_filename)
+      const decodedBase = decoded.replace(/ \(\d+\)(\.[^.]+)$/, '$1')
+      return decodedBase === uploadBaseName || decoded === selectedFile.name
+    })
+    if (hasDuplicate) {
+      const confirmed = window.confirm(
+        `같은 이름의 음원 분리 기록이 있습니다.\n계속 분리하시겠습니까?`
+      )
+      if (!confirmed) return
     }
 
     setIsUploading(true)
@@ -239,6 +269,23 @@ export function MusicRoom() {
       window.removeEventListener('mouseup', handleMouseUp)
     }
   }, [duration])
+
+  // 마스터 볼륨 변경
+  const handleMasterVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const vol = Number(e.target.value)
+    setMasterVolume(vol)
+    if (playerRef.current) {
+      playerRef.current.setMasterVolume(vol / 100)
+    }
+  }
+
+  // 스템 개별 볼륨 변경
+  const handleStemVolumeChange = (stemName: string, value: number) => {
+    setStemVolumes((prev) => ({ ...prev, [stemName]: value }))
+    if (playerRef.current) {
+      playerRef.current.setStemVolume(stemName, value / 100)
+    }
+  }
 
   // 스템 토글
   const handleStemToggle = (stemName: string) => {
@@ -579,6 +626,7 @@ export function MusicRoom() {
               const info = STEM_LABELS[stemName] || { icon: '🎵', label: stemName }
               const isEnabled = stemStates[stemName] !== false
 
+              const stemVol = stemVolumes[stemName] ?? 100
               return (
                 <div key={stemName} className="stem-item">
                   <button
@@ -589,6 +637,20 @@ export function MusicRoom() {
                     <span className="stem-label">{info.label}</span>
                     <span className="stem-status">{isEnabled ? 'ON' : 'OFF'}</span>
                   </button>
+                  <div className="stem-volume-wrap">
+                    <input
+                      type="range"
+                      className="stem-volume-slider"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={stemVol}
+                      disabled={!isEnabled}
+                      onChange={(e) => handleStemVolumeChange(stemName, Number(e.target.value))}
+                      title={`${info.label} 볼륨: ${stemVol}%`}
+                    />
+                    <span className="stem-volume-label">{stemVol}%</span>
+                  </div>
                   <button
                     className="download-stem-btn"
                     onClick={(e) => handleDownloadStem(stemName, e)}
@@ -677,6 +739,22 @@ export function MusicRoom() {
               step="1"
               value={pitch}
               onChange={handlePitchChange}
+              className="control-slider"
+            />
+          </div>
+
+          {/* 마스터 볼륨 */}
+          <div className="control-group">
+            <label>
+              볼륨: <span>{masterVolume}%</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={masterVolume}
+              onChange={handleMasterVolumeChange}
               className="control-slider"
             />
           </div>
